@@ -7,9 +7,6 @@ use stm32f407g_disc::entry;
 use stm32f407g_disc::hal::prelude::*;
 
 use stm32f407g_disc::hal::gpio::{gpiod::PD13, Floating, Input};
-use stm32f407g_disc::hal::interrupt;
-
-static mut LED: *mut PD13<Input<Floating>> = 0 as *mut _;
 
 #[entry]
 fn main() -> ! {
@@ -22,30 +19,14 @@ fn main() -> ! {
     let gpiod = peripherals.GPIOD.split();
     let pin = gpiod.pd13.into_floating_input();
 
-    unsafe {
-        LED = &pin as *const _ as *mut _;
-    }
-
-    peripherals.SYSCFG.exticr1.modify(|_r, w| unsafe {
-        w.exti0().bits(0 /* PORTA */)
-    });
-    peripherals.EXTI.rtsr.modify(|_r, w| w.tr0().set_bit());
-    peripherals.EXTI.imr.modify(|_r, w| w.mr0().set_bit());
-    unsafe {
-        stm32f407g_disc::stm32::NVIC::unmask(interrupt::EXTI0);
-    }
+    let gpioa = peripherals.GPIOA.split();
+    let input = gpioa.pa0.into_floating_input();
 
     loop {
-        cortex_m::asm::wfi();
+        if input.is_high().unwrap() {
+            let mut pin = pin.into_push_pull_output();
+            pin.set_high().unwrap();
+            loop {} // can't re-run the outer loop once we've moved out of pin, so let's get stuck here
+        }
     }
-}
-
-#[interrupt]
-fn EXTI0() {
-    let pin = unsafe { core::ptr::read(LED) };
-    let mut pin = pin.into_push_pull_output();
-    pin.set_high().unwrap();
-
-    let exti = unsafe { &*stm32f407g_disc::stm32::EXTI::ptr() };
-    exti.pr.modify(|_r, w| w.pr0().set_bit());
 }
