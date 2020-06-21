@@ -2,11 +2,10 @@
 #![no_main]
 #![no_std]
 
-use stm32f407g_disc::entry;
 use panic_itm as _;
 
 use cortex_m::iprintln;
-// use cortex_m_rt::entry;
+use stm32f407g_disc::entry;
 
 #[entry]
 fn main() -> ! {
