@@ -44,4 +44,7 @@ fn main() -> ! {
 fn EXTI0() {
     let pin = unsafe { &mut *LED };
     pin.set_high().unwrap();
+
+    let exti = unsafe { &*stm32f407g_disc::stm32::EXTI::ptr() };
+    exti.pr.modify(|_r, w| w.pr0().set_bit());
 }
