@@ -6,7 +6,6 @@ use panic_itm as _;
 use stm32f407g_disc::entry;
 
 use stm32f407g_disc::hal::prelude::*;
-use stm32f407g_disc::led::LedColor::Orange;
 
 #[entry]
 fn main() -> ! {
@@ -16,11 +15,10 @@ fn main() -> ! {
     let clocks = rcc.cfgr.use_hse(8.mhz()).sysclk(168.mhz()).freeze();
 
     let gpiod = peripherals.GPIOD.split();
-    let mut leds = stm32f407g_disc::led::Leds::new(gpiod);
-    let led = &mut leds[Orange];
+    let mut pin = gpiod.pd13.into_push_pull_output();
 
     loop {
-        led.on();
-        led.off();
+        pin.set_high().unwrap();
+        pin.set_low().unwrap();
     }
 }
