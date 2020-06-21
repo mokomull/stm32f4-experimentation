@@ -17,9 +17,10 @@ fn main() -> ! {
 
     let gpiod = peripherals.GPIOD.split();
     let mut leds = stm32f407g_disc::led::Leds::new(gpiod);
+    let led = &mut leds[Orange];
 
     loop {
-        leds[Orange].on();
-        leds[Orange].off();
+        led.on();
+        led.off();
     }
 }
