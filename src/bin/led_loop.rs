@@ -6,12 +6,10 @@ use stm32f407g_disc::entry;
 
 use stm32f407g_disc::hal::prelude::*;
 
-use core::cell::RefCell;
-use cortex_m::interrupt::{free as interrupt_free, Mutex};
 use stm32f407g_disc::hal::gpio::{gpiod::PD13, Output, PushPull};
 use stm32f407g_disc::hal::interrupt;
 
-static LED: Mutex<RefCell<Option<PD13<Output<PushPull>>>>> = Mutex::new(RefCell::new(None));
+static mut LED: *mut PD13<Output<PushPull>> = 0 as *mut _;
 
 #[entry]
 fn main() -> ! {
@@ -24,7 +22,9 @@ fn main() -> ! {
     let gpiod = peripherals.GPIOD.split();
     let pin = gpiod.pd13.into_push_pull_output();
 
-    interrupt_free(|cs| LED.borrow(cs).replace(Some(pin)));
+    unsafe {
+        LED = &pin as *const _ as *mut _;
+    }
 
     peripherals.SYSCFG.exticr1.modify(|_r, w| unsafe {
         w.exti0().bits(0 /* PORTA */)
@@ -42,11 +42,6 @@ fn main() -> ! {
 
 #[interrupt]
 fn EXTI0() {
-    interrupt_free(|cs| {
-        let mut pin_cellref = LED.borrow(cs).borrow_mut();
-        let pin = pin_cellref
-            .as_mut()
-            .expect("LED must be assigned before interrupts enabled");
-        pin.set_high().unwrap();
-    })
+    let pin = unsafe { &mut *LED };
+    pin.set_high().unwrap();
 }
