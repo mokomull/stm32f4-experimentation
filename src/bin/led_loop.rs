@@ -1,5 +1,6 @@
 #![no_main]
 #![no_std]
+#![feature(asm)]
 
 use panic_itm as _;
 use stm32f407g_disc::entry;
@@ -35,7 +36,22 @@ fn main() -> ! {
     let gpioa = peripherals.GPIOA.split();
     let input = gpioa.pa0.into_floating_input();
 
-    while input.is_low().unwrap() {}
-    gpiod.moder.write(|w| w.moder9().variant(INPUT));
+    unsafe {
+        asm!(
+            "
+            1000:
+                ldr r3, [r0, #0x10] // port A IDR
+                lsls r3, #31
+                beq 1000b
+
+                str r2, [r1, #0x0] // MODER
+            ",
+            in("r0") stm32f407g_disc::stm32::GPIOA::ptr(),
+            in("r1") stm32f407g_disc::stm32::GPIOD::ptr(),
+            in("r2") 0, // MODER value of 0 is input
+            out("r3") _,
+        );
+    }
+
     loop {}
 }
