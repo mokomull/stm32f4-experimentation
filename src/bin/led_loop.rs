@@ -36,6 +36,6 @@ fn main() -> ! {
     let input = gpioa.pa0.into_floating_input();
 
     while input.is_low().unwrap() {}
-    gpiod.moder.modify(|_r, w| w.moder9().variant(INPUT));
+    gpiod.moder.write(|w| w.moder9().variant(INPUT));
     loop {}
 }
