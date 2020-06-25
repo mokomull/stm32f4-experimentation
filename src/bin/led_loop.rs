@@ -17,16 +17,13 @@ fn main() -> ! {
     let clocks = rcc.cfgr.use_hse(8.mhz()).sysclk(168.mhz()).freeze();
 
     let gpiod = peripherals.GPIOD.split();
-    let pin = gpiod.pd13.into_floating_input();
+    let mut pin = gpiod.pd9.into_push_pull_output();
+    pin.set_high().unwrap();
 
     let gpioa = peripherals.GPIOA.split();
     let input = gpioa.pa0.into_floating_input();
 
-    loop {
-        if input.is_high().unwrap() {
-            let mut pin = pin.into_push_pull_output();
-            pin.set_high().unwrap();
-            loop {} // can't re-run the outer loop once we've moved out of pin, so let's get stuck here
-        }
-    }
+    while input.is_low().unwrap() {}
+    pin.into_floating_input();
+    loop {}
 }
