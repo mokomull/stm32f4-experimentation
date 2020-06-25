@@ -6,7 +6,11 @@ use stm32f407g_disc::entry;
 
 use stm32f407g_disc::hal::prelude::*;
 
-use stm32f407g_disc::hal::gpio::{gpiod::PD13, Floating, Input};
+use stm32f407g_disc::stm32::gpioi::{
+    moder::MODER15_A::{INPUT, OUTPUT},
+    otyper::OT15_A::PUSHPULL,
+    pupdr::PUPDR15_A::FLOATING,
+};
 
 #[entry]
 fn main() -> ! {
@@ -16,14 +20,22 @@ fn main() -> ! {
     let rcc = peripherals.RCC.constrain();
     let clocks = rcc.cfgr.use_hse(8.mhz()).sysclk(168.mhz()).freeze();
 
-    let gpiod = peripherals.GPIOD.split();
-    let mut pin = gpiod.pd9.into_push_pull_output();
-    pin.set_high().unwrap();
+    // GPIO port D is disabled at start-up; GPIO*.split() handled this for us in the past.
+    unsafe {
+        let rcc = &*stm32f407g_disc::stm32::RCC::ptr();
+        rcc.ahb1enr.modify(|_r, w| w.gpioden().set_bit());
+    }
+
+    let gpiod = peripherals.GPIOD;
+    gpiod.pupdr.write(|w| w.pupdr9().variant(FLOATING));
+    gpiod.otyper.write(|w| w.ot9().variant(PUSHPULL));
+    gpiod.moder.write(|w| w.moder9().variant(OUTPUT));
+    gpiod.odr.write(|w| w.odr9().set_bit());
 
     let gpioa = peripherals.GPIOA.split();
     let input = gpioa.pa0.into_floating_input();
 
     while input.is_low().unwrap() {}
-    pin.into_floating_input();
+    gpiod.moder.modify(|_r, w| w.moder9().variant(INPUT));
     loop {}
 }
