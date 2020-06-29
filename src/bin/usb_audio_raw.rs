@@ -12,7 +12,7 @@ static mut USB_BUF: [u32; 128] = [0; 128];
 #[entry]
 fn main() -> ! {
     let peripherals = stm32f407g_disc::Peripherals::take().unwrap();
-    let core_peripherals = cortex_m::Peripherals::take().unwrap();
+    let mut core_peripherals = cortex_m::Peripherals::take().unwrap();
 
     let rcc = peripherals.RCC.constrain();
     let clocks = rcc
@@ -21,6 +21,12 @@ fn main() -> ! {
         .sysclk(168.mhz())
         .require_pll48clk()
         .freeze();
+
+    cortex_m::iprintln!(
+        &mut core_peripherals.ITM.stim[0],
+        "pclk1 is {}",
+        clocks.pclk1().0
+    );
 
     let porta = peripherals.GPIOA.split();
 
@@ -39,6 +45,27 @@ fn main() -> ! {
         .product("STM32F4 experiment")
         .build();
 
+    // set-up SPI
+    let portb = peripherals.GPIOB.split();
+    let portc = peripherals.GPIOC.split();
+    portb.pb10.into_alternate_af5();
+    portc.pc3.into_alternate_af5();
+    unsafe {
+        let rcc = &*stm32f4xx_hal::stm32::RCC::ptr();
+        rcc.apb1enr.modify(|_r, w| w.spi2en().set_bit());
+    }
+    let spi = peripherals.SPI2;
+    spi.cr1.write(|w| {
+        w.bidimode().set_bit(); // the only way I can see to use MOSI for input
+        w.bidioe().clear_bit(); // and input it
+        w.br().bits(0x5); // 42MHz / 64 = 656.25kbit/s
+        w.ssm().set_bit(); // no need for hardware slave-select, just pretend it's always asserted
+        w.ssi().set_bit();
+        w.mstr().set_bit();
+        w.cpol().set_bit() // idle high, since the board is wired as the "left" mic
+    });
+    spi.cr1.modify(|_r, w| w.spe().set_bit());
+
     let mut send = false;
 
     loop {
@@ -54,8 +81,10 @@ fn main() -> ! {
         }
 
         if send {
-            let _ = serial.write(&[b'A'; 128]);
-            let _ = serial.flush();
+            while spi.sr.read().rxne().bit() {
+                let c: u8 = unsafe { core::ptr::read_volatile(&spi.dr as *const _ as *const u8) };
+                let _ = serial.write(&[c]);
+            }
         }
     }
 }
