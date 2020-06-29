@@ -59,8 +59,8 @@ fn main() -> ! {
         rcc.plli2scfgr.modify(|_r, w| {
             // the HSE clock is divided to 2MHz.
             // and 48ksps * 32bits is more than I can shovel off of USB.  Drop that down to 24 bits
-            // per sample, or 2/3 * 192 = 128MHz.  That's still within the PLL range, yay!
-            w.plli2sn().bits(128 / 2);
+            // per sample, or 3/4 * 192 = 144MHz.  That's still within the PLL range, yay!
+            w.plli2sn().bits(144 / 2);
             w.plli2sr().bits(5)
         });
         rcc.cr.modify(|_r, w| w.plli2son().set_bit());
