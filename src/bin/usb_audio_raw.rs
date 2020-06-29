@@ -39,18 +39,23 @@ fn main() -> ! {
         .product("STM32F4 experiment")
         .build();
 
-    let mut delay = stm32f4xx_hal::delay::Delay::new(core_peripherals.SYST, clocks);
+    let mut send = false;
 
-    let mut count = 0;
     loop {
         device.poll(&mut [&mut serial]);
-
-        if count >= 1000 {
-            count = 0;
-            let _ = serial.write(b"Hello, world!\r\n");
-        } else {
-            count += 1;
+        let mut buf = [0; 32];
+        if let Ok(_count) = serial.read(&mut buf) {
+            if buf[0] == b'A' {
+                send = true;
+            }
+            if buf[0] == b'B' {
+                send = false;
+            }
         }
-        delay.delay_ms(1u32);
+
+        if send {
+            let _ = serial.write(&[b'A'; 128]);
+            let _ = serial.flush();
+        }
     }
 }
