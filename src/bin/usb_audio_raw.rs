@@ -5,6 +5,7 @@ use panic_itm as _;
 
 use stm32f407g_disc::entry;
 use stm32f4xx_hal::prelude::*;
+use stm32f4xx_hal::stm32::spi1::i2scfgr::{CHLEN_A, CKPOL_A, DATLEN_A, I2SCFG_A};
 use usb_device::prelude::*;
 
 static mut USB_BUF: [u32; 128] = [0; 128];
@@ -53,18 +54,32 @@ fn main() -> ! {
     unsafe {
         let rcc = &*stm32f4xx_hal::stm32::RCC::ptr();
         rcc.apb1enr.modify(|_r, w| w.spi2en().set_bit());
+        // from the table in the SPI peripheral documentation, for 48ksps, 16bits/sample,
+        // N = 192MHz, R = 5
+        rcc.plli2scfgr.modify(|_r, w| {
+            // the HSE clock is divided to 2MHz.
+            // and 48ksps * 32bits is more than I can shovel off of USB.  Drop that down to 24 bits
+            // per sample, or 2/3 * 192 = 128MHz.  That's still within the PLL range, yay!
+            w.plli2sn().bits(128 / 2);
+            w.plli2sr().bits(5)
+        });
+        rcc.cr.modify(|_r, w| w.plli2son().set_bit());
+        while !rcc.cr.read().plli2srdy().bit() {}
     }
     let spi = peripherals.SPI2;
-    spi.cr1.write(|w| {
-        w.bidimode().set_bit(); // the only way I can see to use MOSI for input
-        w.bidioe().clear_bit(); // and input it
-        w.br().bits(0x5); // 42MHz / 64 = 656.25kbit/s
-        w.ssm().set_bit(); // no need for hardware slave-select, just pretend it's always asserted
-        w.ssi().set_bit();
-        w.mstr().set_bit();
-        w.cpol().set_bit() // idle high, since the board is wired as the "left" mic
+    spi.i2scfgr.write(|w| {
+        w.i2smod().set_bit();
+        w.i2scfg().variant(I2SCFG_A::MASTERRX);
+        w.ckpol().variant(CKPOL_A::IDLEHIGH);
+        w.datlen().variant(DATLEN_A::SIXTEENBIT);
+        w.chlen().variant(CHLEN_A::SIXTEENBIT)
     });
-    spi.cr1.modify(|_r, w| w.spe().set_bit());
+    // from that same table, I2SDIV = 12, ODD = 1
+    spi.i2spr.write(|w| {
+        unsafe { w.i2sdiv().bits(12) };
+        w.odd().set_bit()
+    });
+    spi.i2scfgr.modify(|_r, w| w.i2se().set_bit());
 
     let mut send = false;
 
@@ -82,8 +97,9 @@ fn main() -> ! {
 
         if send {
             while spi.sr.read().rxne().bit() {
-                let c: u8 = unsafe { core::ptr::read_volatile(&spi.dr as *const _ as *const u8) };
-                let _ = serial.write(&[c]);
+                let data: u16 = spi.dr.read().dr().bits();
+                let bytes = data.to_be_bytes();
+                let _ = serial.write(&bytes);
             }
         }
     }
