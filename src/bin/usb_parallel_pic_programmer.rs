@@ -1,8 +1,6 @@
 #![no_main]
 #![no_std]
 
-use core::marker::PhantomData;
-
 use panic_itm as _;
 
 use stm32f407g_disc::entry;
@@ -10,6 +8,7 @@ use stm32f4xx_hal::prelude::*;
 
 use usb_device::bus::{UsbBus, UsbBusAllocator};
 use usb_device::class::UsbClass;
+use usb_device::class_prelude::*;
 use usb_device::prelude::*;
 
 static mut USB_BUF: [u32; 128] = [0; 128];
@@ -49,20 +48,42 @@ fn main() -> ! {
     }
 }
 
-struct ParallelPort<B>
+struct ParallelPort<'a, B>
 where
     B: UsbBus,
 {
-    _junk: PhantomData<B>,
+    interface: InterfaceNumber,
+    ep_out: EndpointOut<'a, B>,
+    ep_in: EndpointIn<'a, B>,
 }
 
-impl<B> ParallelPort<B>
+impl<'a, B> ParallelPort<'a, B>
 where
     B: UsbBus,
 {
-    pub fn new(_allocator: &'_ UsbBusAllocator<B>) -> Self {
-        Self { _junk: PhantomData }
+    pub fn new(allocator: &'a UsbBusAllocator<B>) -> Self {
+        let interface = allocator.interface();
+        let ep_out = allocator.bulk::<usb_device::endpoint::Out>(8);
+        let ep_in = allocator.bulk::<usb_device::endpoint::In>(8);
+        Self {
+            interface,
+            ep_out,
+            ep_in,
+        }
     }
 }
 
-impl<B> UsbClass<B> for ParallelPort<B> where B: UsbBus {}
+impl<'a, B> UsbClass<B> for ParallelPort<'a, B>
+where
+    B: UsbBus,
+{
+    fn get_configuration_descriptors(
+        &self,
+        writer: &mut DescriptorWriter,
+    ) -> usb_device::Result<()> {
+        writer.interface(self.interface, 0x07, 0x01, 0x01 /* unidirectional */)?;
+        writer.endpoint(&self.ep_out)?;
+        writer.endpoint(&self.ep_in)?;
+        Ok(())
+    }
+}
