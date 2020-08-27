@@ -1,10 +1,15 @@
 #![no_main]
 #![no_std]
 
+use core::marker::PhantomData;
+
 use panic_itm as _;
 
 use stm32f407g_disc::entry;
 use stm32f4xx_hal::prelude::*;
+
+use usb_device::bus::{UsbBus, UsbBusAllocator};
+use usb_device::class::UsbClass;
 use usb_device::prelude::*;
 
 static mut USB_BUF: [u32; 128] = [0; 128];
@@ -33,13 +38,31 @@ fn main() -> ! {
     };
 
     let bus = stm32f4xx_hal::otg_fs::UsbBus::new(usb, unsafe { &mut USB_BUF });
-    let mut serial = usbd_serial::SerialPort::new(&bus);
+    let mut parallel = ParallelPort::new(&bus);
     let mut device = UsbDeviceBuilder::new(&bus, UsbVidPid(0x1337, 0xd00d))
         .manufacturer("Matt Mullins")
         .product("STM32F4 experiment")
         .build();
 
     loop {
-        device.poll(&mut [&mut serial]);
+        device.poll(&mut [&mut parallel]);
     }
 }
+
+struct ParallelPort<B>
+where
+    B: UsbBus,
+{
+    _junk: PhantomData<B>,
+}
+
+impl<B> ParallelPort<B>
+where
+    B: UsbBus,
+{
+    pub fn new(_allocator: &'_ UsbBusAllocator<B>) -> Self {
+        Self { _junk: PhantomData }
+    }
+}
+
+impl<B> UsbClass<B> for ParallelPort<B> where B: UsbBus {}
