@@ -31,6 +31,7 @@ fn main() -> ! {
     // the DAC overrides what was selected in the GPIO module, but the datasheet recommended the pin
     // be switched to analog input.
     let _signal_out = porta.pa4.into_analog();
+    let _signal_in = porta.pa0.into_analog();
 
     // enable the DAC peripheral
     unsafe {
@@ -138,5 +139,22 @@ fn main() -> ! {
     timer.cr2.write(|w| w.mms().update()); // send a TRGO event when the timer updates
     timer.cr1.write(|w| w.cen().set_bit());
 
-    loop {}
+    // run the ADC on TIM2_TRGO (that is: at SAMPLE_RATE samples/sec) and have it request DMA.
+    // only want one measurement each clock, from channel 0
+    adc.sqr1
+        .write(|w| w.l().bits(0 /* datasheet says "0b0000: 1 conversion" */));
+    adc.sqr3.write(|w| unsafe { w.sq1().bits(0) });
+    // set up the ADC for 12-bit samples, DMA
+    adc.cr1.write(|w| w.res().twelve_bit());
+    adc.cr2.write(|w| {
+        w.exten().rising_edge();
+        w.extsel().tim2trgo();
+        w.align().right();
+        w.dma().enabled();
+        w.adon().enabled()
+    });
+
+    loop {
+        cortex_m::asm::wfi();
+    }
 }
