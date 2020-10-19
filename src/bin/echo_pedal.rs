@@ -37,9 +37,13 @@ fn main() -> ! {
         let rcc = &*stm32::RCC::ptr();
         rcc.apb1enr.modify(|_r, w| {
             w.dacen().set_bit();
-            w.tim4en().set_bit()
+            w.tim2en().set_bit()
         });
-        rcc.ahb1enr.modify(|_r, w| w.dma1en().set_bit());
+        rcc.ahb1enr.modify(|_r, w| {
+            w.dma1en().set_bit();
+            w.dma2en().set_bit()
+        });
+        rcc.apb2enr.modify(|_r, w| w.adc1en().set_bit())
     }
 
     loop {}
