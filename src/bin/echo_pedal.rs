@@ -91,6 +91,9 @@ fn main() -> ! {
         // finally: enable the DMA stream!
         w.en().enabled()
     });
+    // prevent anything below from touching this stream accidentally
+    #[allow(unused_variables)]
+    let adc_stream = ();
 
     // set up DMA1 to read from the buffer into DAC
     // this is the same as above, except:
@@ -98,11 +101,11 @@ fn main() -> ! {
     //   * register address is different
     //   * direction is flipped
     let dac_stream = &dma1.st[5];
-    // from the ADC
-    adc_stream
+    // to the DAC
+    dac_stream
         .par
         .write(|w| unsafe { w.bits(&dac.dhr12r1 as *const _ as u32) });
-    // to buffer
+    // from the buffer
     dac_stream
         .m0ar
         .write(|w| unsafe { w.bits(&mut buffer[0] as *mut _ as u32) });
@@ -110,7 +113,7 @@ fn main() -> ! {
     dac_stream.ndtr.write(|w| w.ndt().bits(buffer.len() as u16));
     // and let 'er rip!
     dac_stream.cr.write(|w| {
-        w.chsel().bits(0);
+        w.chsel().bits(7);
         // everything is a single sample at a time
         w.mburst().single();
         w.pburst().single();
@@ -131,6 +134,9 @@ fn main() -> ! {
         // finally: enable the DMA stream!
         w.en().enabled()
     });
+    // prevent anything below from touching this stream accidentally too
+    #[allow(unused_variables)]
+    let dac_stream = ();
 
     // subtract one because the timer iterates from zero through (and including) this value.
     timer
