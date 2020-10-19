@@ -150,6 +150,7 @@ fn main() -> ! {
         w.exten().rising_edge();
         w.extsel().tim2trgo();
         w.align().right();
+        w.dds().continuous(); // ignore the "last" DMA transfer, since it's circular
         w.dma().enabled();
         w.adon().enabled()
     });
