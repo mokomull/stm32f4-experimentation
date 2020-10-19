@@ -22,7 +22,7 @@ fn main() -> ! {
     let mut core_peripherals = cortex_m::Peripherals::take().unwrap();
 
     let rcc = peripherals.RCC.constrain();
-    let _clocks = rcc.cfgr.use_hse(8.mhz()).sysclk(168.mhz()).freeze();
+    let clocks = rcc.cfgr.use_hse(8.mhz()).sysclk(168.mhz()).freeze();
 
     let _itm = &mut core_peripherals.ITM.stim[0];
 
@@ -153,6 +153,20 @@ fn main() -> ! {
         w.dds().continuous(); // ignore the "last" DMA transfer, since it's circular
         w.dma().enabled();
         w.adon().enabled()
+    });
+
+    // sleep for 100ms to set up a delay, before having the DAC dequeue samples
+    let mut delay = stm32f4xx_hal::delay::Delay::new(core_peripherals.SYST, clocks);
+    delay.delay_ms(100u8);
+
+    // now make the DAC start triggering DMA
+    dac.cr.write(|w| {
+        w.dmaen1().enabled();
+        unsafe {
+            w.tsel1().bits(0b100 /* timer 2 TRGO */)
+        };
+        w.ten1().enabled();
+        w.en1().set_bit()
     });
 
     loop {
