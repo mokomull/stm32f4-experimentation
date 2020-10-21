@@ -42,29 +42,29 @@ Wire Wire Line
 $Comp
 L Connector:AudioJack2 J2
 U 1 1 5F8CE6EC
-P 6850 1700
-F 0 "J2" H 6671 1683 50  0000 R CNN
-F 1 "AudioJack2" H 6671 1774 50  0000 R CNN
-F 2 "" H 6850 1700 50  0001 C CNN
-F 3 "~" H 6850 1700 50  0001 C CNN
-	1    6850 1700
+P 6850 800
+F 0 "J2" H 6671 783 50  0000 R CNN
+F 1 "AudioJack2" H 6671 874 50  0000 R CNN
+F 2 "" H 6850 800 50  0001 C CNN
+F 3 "~" H 6850 800 50  0001 C CNN
+	1    6850 800 
 	-1   0    0    1   
 $EndComp
 $Comp
 L power:GND #PWR05
 U 1 1 5F8CE6F2
-P 6600 1850
-F 0 "#PWR05" H 6600 1600 50  0001 C CNN
-F 1 "GND" H 6605 1677 50  0000 C CNN
-F 2 "" H 6600 1850 50  0001 C CNN
-F 3 "" H 6600 1850 50  0001 C CNN
-	1    6600 1850
+P 6600 950
+F 0 "#PWR05" H 6600 700 50  0001 C CNN
+F 1 "GND" H 6605 777 50  0000 C CNN
+F 2 "" H 6600 950 50  0001 C CNN
+F 3 "" H 6600 950 50  0001 C CNN
+	1    6600 950 
 	-1   0    0    -1  
 $EndComp
 Wire Wire Line
-	6650 1800 6600 1800
+	6650 900  6600 900 
 Wire Wire Line
-	6600 1800 6600 1850
+	6600 900  6600 950 
 $Comp
 L Amplifier_Operational:LM324 U1
 U 1 1 5F8CEB0C
@@ -115,51 +115,7 @@ Wire Wire Line
 Wire Wire Line
 	2950 1250 3100 1250
 Connection ~ 3100 1250
-$Comp
-L Device:R R6
-U 1 1 5F8D3975
-P 4800 1350
-F 0 "R6" V 4593 1350 50  0000 C CNN
-F 1 "1k" V 4684 1350 50  0000 C CNN
-F 2 "" V 4730 1350 50  0001 C CNN
-F 3 "~" H 4800 1350 50  0001 C CNN
-	1    4800 1350
-	0    1    1    0   
-$EndComp
-Wire Wire Line
-	4650 1350 4500 1350
 Connection ~ 4500 1350
-$Comp
-L Device:D D1
-U 1 1 5F8D4BAF
-P 5100 1100
-F 0 "D1" V 5054 1180 50  0000 L CNN
-F 1 "D" V 5145 1180 50  0000 L CNN
-F 2 "" H 5100 1100 50  0001 C CNN
-F 3 "~" H 5100 1100 50  0001 C CNN
-	1    5100 1100
-	0    1    1    0   
-$EndComp
-Wire Wire Line
-	4950 1350 5100 1350
-Wire Wire Line
-	5100 1250 5100 1350
-$Comp
-L power:+3V0 #PWR04
-U 1 1 5F8D61FE
-P 5100 900
-F 0 "#PWR04" H 5100 750 50  0001 C CNN
-F 1 "+3V0" H 5115 1073 50  0000 C CNN
-F 2 "" H 5100 900 50  0001 C CNN
-F 3 "" H 5100 900 50  0001 C CNN
-	1    5100 900 
-	1    0    0    -1  
-$EndComp
-Wire Wire Line
-	5100 900  5100 950 
-Wire Wire Line
-	5100 1350 5350 1350
-Connection ~ 5100 1350
 $Comp
 L Device:R R2
 U 1 1 5F8E1F19
@@ -233,9 +189,7 @@ Connection ~ 3300 1950
 Wire Wire Line
 	3300 1950 3300 2000
 Wire Wire Line
-	4500 1350 4500 1700
-Wire Wire Line
-	4500 1700 6650 1700
+	4500 800  6650 800 
 $Comp
 L Device:R_POT RV1
 U 1 1 5F9288A1
@@ -259,13 +213,11 @@ Connection ~ 2000 1600
 Wire Wire Line
 	2000 1600 2050 1600
 Wire Wire Line
-	2350 1600 2650 1600
+	2350 1600 2550 1600
 Wire Wire Line
 	5750 2900 1850 2900
 Wire Wire Line
 	5750 3250 5750 2900
-Wire Wire Line
-	5350 1350 5350 3250
 $Comp
 L MCU_ST_STM32F4:STM32F407VGTx U2
 U 1 1 5F8D98D0
@@ -278,10 +230,10 @@ F 3 "http://www.st.com/st-web-ui/static/active/en/resource/technical/document/da
 	0    -1   -1   0   
 $EndComp
 $Comp
-L Amplifier_Operational:LM324 U?
+L Amplifier_Operational:LM324 U1
 U 5 1 5F945A47
 P 9000 1200
-F 0 "U?" H 8958 1246 50  0000 L CNN
+F 0 "U1" H 8958 1246 50  0000 L CNN
 F 1 "LM324" H 8958 1155 50  0000 L CNN
 F 2 "" H 8950 1300 50  0001 C CNN
 F 3 "http://www.ti.com/lit/ds/symlink/lm2902-n.pdf" H 9050 1400 50  0001 C CNN
@@ -289,10 +241,10 @@ F 3 "http://www.ti.com/lit/ds/symlink/lm2902-n.pdf" H 9050 1400 50  0001 C CNN
 	1    0    0    -1  
 $EndComp
 $Comp
-L power:+5V #PWR?
+L power:+5V #PWR04
 U 1 1 5F94DC93
 P 8900 900
-F 0 "#PWR?" H 8900 750 50  0001 C CNN
+F 0 "#PWR04" H 8900 750 50  0001 C CNN
 F 1 "+5V" H 8915 1073 50  0000 C CNN
 F 2 "" H 8900 900 50  0001 C CNN
 F 3 "" H 8900 900 50  0001 C CNN
@@ -300,14 +252,143 @@ F 3 "" H 8900 900 50  0001 C CNN
 	1    0    0    -1  
 $EndComp
 $Comp
-L power:GND #PWR?
+L power:GND #PWR06
 U 1 1 5F94E6C4
 P 8900 1500
-F 0 "#PWR?" H 8900 1250 50  0001 C CNN
+F 0 "#PWR06" H 8900 1250 50  0001 C CNN
 F 1 "GND" H 8905 1327 50  0000 C CNN
 F 2 "" H 8900 1500 50  0001 C CNN
 F 3 "" H 8900 1500 50  0001 C CNN
 	1    8900 1500
 	1    0    0    -1  
 $EndComp
+$Comp
+L Amplifier_Operational:LM324 U1
+U 4 1 5F963917
+P 5200 2250
+F 0 "U1" H 5200 1883 50  0000 C CNN
+F 1 "LM324" H 5200 1974 50  0000 C CNN
+F 2 "" H 5150 2350 50  0001 C CNN
+F 3 "http://www.ti.com/lit/ds/symlink/lm2902-n.pdf" H 5250 2450 50  0001 C CNN
+	4    5200 2250
+	1    0    0    1   
+$EndComp
+$Comp
+L Device:R R7
+U 1 1 5F966791
+P 5150 1700
+F 0 "R7" V 4943 1700 50  0000 C CNN
+F 1 "47k" V 5034 1700 50  0000 C CNN
+F 2 "" V 5080 1700 50  0001 C CNN
+F 3 "~" H 5150 1700 50  0001 C CNN
+	1    5150 1700
+	0    1    1    0   
+$EndComp
+$Comp
+L Device:R R6
+U 1 1 5F972EEC
+P 4500 1800
+F 0 "R6" H 4430 1754 50  0000 R CNN
+F 1 "47k" H 4430 1845 50  0000 R CNN
+F 2 "" V 4430 1800 50  0001 C CNN
+F 3 "~" H 4500 1800 50  0001 C CNN
+	1    4500 1800
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	5500 2250 5500 1700
+Wire Wire Line
+	5500 1700 5300 1700
+Wire Wire Line
+	4900 2150 4750 2150
+Wire Wire Line
+	4500 2150 4500 1950
+Wire Wire Line
+	4750 2150 4750 1700
+Wire Wire Line
+	4750 1700 5000 1700
+Connection ~ 4750 2150
+Wire Wire Line
+	4750 2150 4500 2150
+Wire Wire Line
+	4500 1350 4500 1650
+Wire Wire Line
+	3650 1950 3650 2350
+Wire Wire Line
+	3650 2350 4900 2350
+Connection ~ 3650 1950
+Wire Wire Line
+	5500 2250 5500 2550
+Wire Wire Line
+	5500 2550 5350 2550
+Wire Wire Line
+	5350 2550 5350 3250
+Connection ~ 5500 2250
+Connection ~ 4500 800 
+$Comp
+L Device:C C1
+U 1 1 5F98D747
+P 5150 1250
+F 0 "C1" V 4898 1250 50  0000 C CNN
+F 1 "1nF" V 4989 1250 50  0000 C CNN
+F 2 "" H 5188 1100 50  0001 C CNN
+F 3 "~" H 5150 1250 50  0001 C CNN
+	1    5150 1250
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	4750 1700 4750 1250
+Wire Wire Line
+	4750 1250 5000 1250
+Connection ~ 4750 1700
+Wire Wire Line
+	5300 1250 5500 1250
+Wire Wire Line
+	5500 1250 5500 1700
+Connection ~ 5500 1700
+Text Notes 5550 1950 0    50   ~ 0
+neither this cap nor this (inverting) buffer\nseemed to help anything.  It stayed pretty noisy.
+Wire Notes Line
+	6100 1800 6100 1050
+Wire Notes Line
+	6100 1050 5250 1050
+$Comp
+L Device:C C2
+U 1 1 5F9918BF
+P 2550 1850
+F 0 "C2" H 2435 1804 50  0000 R CNN
+F 1 "1nF" H 2435 1895 50  0000 R CNN
+F 2 "" H 2588 1700 50  0001 C CNN
+F 3 "~" H 2550 1850 50  0001 C CNN
+	1    2550 1850
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	2550 1600 2550 1700
+Connection ~ 2550 1600
+Wire Wire Line
+	2550 1600 2650 1600
+$Comp
+L power:GND #PWR07
+U 1 1 5F994997
+P 2550 2000
+F 0 "#PWR07" H 2550 1750 50  0001 C CNN
+F 1 "GND" H 2555 1827 50  0000 C CNN
+F 2 "" H 2550 2000 50  0001 C CNN
+F 3 "" H 2550 2000 50  0001 C CNN
+	1    2550 2000
+	1    0    0    -1  
+$EndComp
+Text Notes 2000 3300 0    50   ~ 0
+but adding THIS cap helped a whole lot
+Wire Notes Line
+	2550 3150 2550 2300
+Wire Notes Line
+	2550 2300 2700 2300
+Wire Notes Line
+	2700 2300 2700 2000
+Wire Notes Line
+	2700 2000 2600 2000
+Wire Notes Line
+	2600 2000 2600 1950
 $EndSCHEMATC
