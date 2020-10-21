@@ -166,7 +166,7 @@ fn main() -> ! {
 
     // sleep for 100ms to set up a delay, before having the DAC dequeue samples
     let mut delay = stm32f4xx_hal::delay::Delay::new(core_peripherals.SYST, clocks);
-    delay.delay_ms(100u8);
+    delay.delay_ms(800u16);
 
     // now make the DAC start triggering DMA
     dac.cr.write(|w| {
