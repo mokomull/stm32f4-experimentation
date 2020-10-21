@@ -150,6 +150,9 @@ fn main() -> ! {
     adc.sqr1
         .write(|w| w.l().bits(0 /* datasheet says "0b0000: 1 conversion" */));
     adc.sqr3.write(|w| unsafe { w.sq1().bits(0) });
+    // run the ADC clock at pclk2 (84MHz) / 8 = 10.5MHz.  That's now within the datasheet tolerance
+    // for the ADC, and plenty fast to take one sample 48k times per second.
+    peripherals.ADC_COMMON.ccr.modify(|_r, w| w.adcpre().div8());
     // set up the ADC for 12-bit samples, DMA
     adc.cr1.write(|w| w.res().twelve_bit());
     adc.cr2.write(|w| {
