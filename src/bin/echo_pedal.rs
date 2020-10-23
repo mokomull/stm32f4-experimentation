@@ -118,6 +118,7 @@ fn main() -> ! {
         w.exten().rising_edge();
         w.extsel().tim2trgo();
         w.align().right();
+        w.dds().continuous();
         w.dma().enabled();
         w.adon().enabled()
     });
