@@ -131,9 +131,6 @@ fn main() -> ! {
         // wait for the DMA buffer to fill up
         while adc_stream.cr.read().en().bit() {}
 
-        adc_stream.cr.modify(|_r, w| w.en().disabled());
-        adc.cr2.modify(|_r, w| w.dma().disabled());
-
         let new_sample = adc_buffer[this].iter().sum::<u16>() / SAMPLES_TO_AVERAGE as u16;
 
         // write that sample 800ms into the future
@@ -143,8 +140,6 @@ fn main() -> ! {
         dac.dhr12r1
             .write(|w| unsafe { w.dacc1dhr().bits(buffer[i]) });
 
-        // make sure the DMA channel is disabled before changing anything
-        while adc_stream.cr.read().en().bit() {}
         // set up DMA to the next adc_buffer
         adc_stream
             .m0ar
@@ -162,11 +157,10 @@ fn main() -> ! {
         adc_stream.cr.modify(|_r, w| w.en().enabled());
         // clear the "end of conversion" flag so that the next iteration knows to wait
         adc.sr.modify(|_r, w| w.eoc().clear_bit());
-        // and re-enable the ADC for good
-        adc.cr2.modify(|_r, w| {
-            w.dma().enabled();
-            w.adon().enabled()
-        });
+        // in order to reset the "DMA completed" status, you have to turn DMA off
+        adc.cr2.modify(|_r, w| w.dma().disabled());
+        // and back on again
+        adc.cr2.modify(|_r, w| w.dma().enabled());
 
         // for sanity sake, make sure we didn't take too long computing the average
         if adc.sr.read().ovr().bit() {
