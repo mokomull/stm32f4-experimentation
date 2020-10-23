@@ -128,8 +128,8 @@ fn main() -> ! {
     for i in (0..buffer.len()).cycle() {
         let (this, next) = (i % 2, (i + 1) % 2);
 
-        // wait for sequence of conversions to complete
-        while !adc.sr.read().eoc().bit() {}
+        // wait for the DMA buffer to fill up
+        while adc_stream.cr.read().en().bit() {}
 
         adc_stream.cr.modify(|_r, w| w.en().disabled());
         adc.cr2.modify(|_r, w| w.dma().disabled());
