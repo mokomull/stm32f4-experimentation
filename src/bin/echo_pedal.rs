@@ -11,10 +11,12 @@ use stm32f4xx_hal::stm32;
 // 84MHz, since I suppose the APBx prescaler causes the timer clock to be doubled...
 const TIMER_CLOCK_RATE: usize = 84_000_000;
 const SAMPLE_RATE: usize = 48_000;
+const SAMPLES_TO_AVERAGE: usize = 10;
+const TIMER_RATE: usize = SAMPLE_RATE * SAMPLES_TO_AVERAGE;
 // the timer won't behave correctly if the sample rate is not an exact integer number of ticks
-static_assertions::const_assert_eq!(TIMER_CLOCK_RATE % SAMPLE_RATE, 0);
+static_assertions::const_assert_eq!(TIMER_CLOCK_RATE % TIMER_RATE, 0);
 // nor if it takes more than 32 bits to represent the delay
-static_assertions::const_assert!(TIMER_CLOCK_RATE / SAMPLE_RATE <= 0xFFFF_FFFF);
+static_assertions::const_assert!(TIMER_CLOCK_RATE / TIMER_RATE <= 0xFFFF_FFFF);
 
 #[entry]
 fn main() -> ! {
@@ -22,7 +24,7 @@ fn main() -> ! {
     let mut core_peripherals = cortex_m::Peripherals::take().unwrap();
 
     let rcc = peripherals.RCC.constrain();
-    let clocks = rcc.cfgr.use_hse(8.mhz()).sysclk(168.mhz()).freeze();
+    let _clocks = rcc.cfgr.use_hse(8.mhz()).sysclk(168.mhz()).freeze();
 
     let _itm = &mut core_peripherals.ITM.stim[0];
 
@@ -47,7 +49,6 @@ fn main() -> ! {
         rcc.apb2enr.modify(|_r, w| w.adc1en().set_bit())
     }
 
-    let dma1 = peripherals.DMA1;
     let dma2 = peripherals.DMA2;
     let timer = peripherals.TIM2;
     let adc = peripherals.ADC1;
@@ -55,6 +56,8 @@ fn main() -> ! {
 
     // buffer that can hold a second of data
     let mut buffer = [0u16; SAMPLE_RATE];
+    // and ones that can hold just enough from the ADC, to ping-pong between
+    let mut adc_buffer = [[0u16; SAMPLES_TO_AVERAGE]; 2];
 
     // set up DMA2 to read from ADC1 into buffer, in a circular fashion
     let adc_stream = &dma2.st[0];
@@ -65,16 +68,18 @@ fn main() -> ! {
     // to buffer
     adc_stream
         .m0ar
-        .write(|w| unsafe { w.bits(&mut buffer[0] as *mut _ as u32) });
+        .write(|w| unsafe { w.bits(&mut adc_buffer[0][0] as *mut _ as u32) });
     // how many samples
-    adc_stream.ndtr.write(|w| w.ndt().bits(buffer.len() as u16));
+    adc_stream
+        .ndtr
+        .write(|w| w.ndt().bits(SAMPLES_TO_AVERAGE as u16));
     // and let 'er rip!
     adc_stream.cr.write(|w| {
         w.chsel().bits(0);
         // everything is a single sample at a time
         w.mburst().single();
         w.pburst().single();
-        // we want circular, not double-buffered
+        // we'll be managing our own buffers, not hardware double-buffered
         w.dbm().disabled();
         // 16 bits at a time
         w.msize().bits16();
@@ -82,8 +87,8 @@ fn main() -> ! {
         // increment memory address, but read from the ADC every time
         w.minc().incremented();
         w.pinc().fixed();
-        // again, we want circular
-        w.circ().enabled();
+        // again, we'll be managing this ourselves
+        w.circ().disabled();
         // we're reading from the ADC
         w.dir().peripheral_to_memory();
         // the DMA controller knows how many bytes to transfer
@@ -91,61 +96,15 @@ fn main() -> ! {
         // finally: enable the DMA stream!
         w.en().enabled()
     });
-    // prevent anything below from touching this stream accidentally
-    #[allow(unused_variables)]
-    let adc_stream = ();
-
-    // set up DMA1 to read from the buffer into DAC
-    // this is the same as above, except:
-    //   * peripheral #1, stream 5, channel 7
-    //   * register address is different
-    //   * direction is flipped
-    let dac_stream = &dma1.st[5];
-    // to the DAC
-    dac_stream
-        .par
-        .write(|w| unsafe { w.bits(&dac.dhr12r1 as *const _ as u32) });
-    // from the buffer
-    dac_stream
-        .m0ar
-        .write(|w| unsafe { w.bits(&mut buffer[0] as *mut _ as u32) });
-    // how many samples
-    dac_stream.ndtr.write(|w| w.ndt().bits(buffer.len() as u16));
-    // and let 'er rip!
-    dac_stream.cr.write(|w| {
-        w.chsel().bits(7);
-        // everything is a single sample at a time
-        w.mburst().single();
-        w.pburst().single();
-        // we want circular, not double-buffered
-        w.dbm().disabled();
-        // 16 bits at a time
-        w.msize().bits16();
-        w.psize().bits16();
-        // increment memory address, but read from the ADC every time
-        w.minc().incremented();
-        w.pinc().fixed();
-        // again, we want circular
-        w.circ().enabled();
-        // we're writing to the DAC
-        w.dir().memory_to_peripheral();
-        // the DMA controller knows how many bytes to transfer
-        w.pfctrl().dma();
-        // finally: enable the DMA stream!
-        w.en().enabled()
-    });
-    // prevent anything below from touching this stream accidentally too
-    #[allow(unused_variables)]
-    let dac_stream = ();
 
     // subtract one because the timer iterates from zero through (and including) this value.
     timer
         .arr
-        .write(|w| w.arr().bits((TIMER_CLOCK_RATE / SAMPLE_RATE - 1) as u32));
+        .write(|w| w.arr().bits((TIMER_CLOCK_RATE / TIMER_RATE - 1) as u32));
     timer.cr2.write(|w| w.mms().update()); // send a TRGO event when the timer updates
     timer.cr1.write(|w| w.cen().set_bit());
 
-    // run the ADC on TIM2_TRGO (that is: at SAMPLE_RATE samples/sec) and have it request DMA.
+    // run the ADC on TIM2_TRGO (that is: at TIMER_RATE samples/sec) and have it request DMA.
     // only want one measurement each clock, from channel 0
     adc.sqr1
         .write(|w| w.l().bits(0 /* datasheet says "0b0000: 1 conversion" */));
@@ -159,26 +118,48 @@ fn main() -> ! {
         w.exten().rising_edge();
         w.extsel().tim2trgo();
         w.align().right();
-        w.dds().continuous(); // ignore the "last" DMA transfer, since it's circular
         w.dma().enabled();
         w.adon().enabled()
     });
 
-    // sleep for 100ms to set up a delay, before having the DAC dequeue samples
-    let mut delay = stm32f4xx_hal::delay::Delay::new(core_peripherals.SYST, clocks);
-    delay.delay_ms(800u16);
+    // enable the DAC
+    dac.cr.write(|w| w.en1().set_bit());
 
-    // now make the DAC start triggering DMA
-    dac.cr.write(|w| {
-        w.dmaen1().enabled();
-        unsafe {
-            w.tsel1().bits(0b100 /* timer 2 TRGO */)
-        };
-        w.ten1().enabled();
-        w.en1().set_bit()
-    });
+    for i in (0..buffer.len()).cycle() {
+        let (this, next) = (i % 2, (i + 1) % 2);
 
-    loop {
-        cortex_m::asm::wfi();
+        // wait for sequence of conversions to complete
+        while !adc.sr.read().eoc().bit() {}
+
+        let new_sample = adc_buffer[this].iter().sum::<u16>() / SAMPLES_TO_AVERAGE as u16;
+
+        // write that sample 800ms into the future
+        buffer[(i + (SAMPLE_RATE * 800 / 1000)) % buffer.len()] = new_sample;
+
+        // output to the DAC
+        dac.dhr12r1
+            .write(|w| unsafe { w.dacc1dhr().bits(buffer[i]) });
+
+        // set up DMA to the next adc_buffer
+        adc_stream
+            .m0ar
+            .write(|w| w.m0a().bits(&adc_buffer[next][0] as *const _ as u32));
+        dma2.lifcr.write(|w| {
+            w.ctcif0().set_bit();
+            w.chtif0().set_bit();
+            w.cteif0().set_bit();
+            w.cdmeif0().set_bit();
+            w.cfeif0().set_bit()
+        });
+        adc_stream.cr.modify(|_r, w| w.en().enabled());
+        // and re-enable the ADC
+        adc.cr2.modify(|_r, w| w.adon().enabled());
+
+        // for sanity sake, make sure we didn't take too long computing the average
+        if adc.sr.read().ovr().bit() {
+            panic!("overran the ADC");
+        }
     }
+
+    panic!("cycle() should never complete");
 }
