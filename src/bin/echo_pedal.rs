@@ -8,6 +8,8 @@ use stm32f4xx_hal::prelude::*;
 
 use stm32f4xx_hal::stm32;
 
+use biquad::Biquad;
+
 // 84MHz, since I suppose the APBx prescaler causes the timer clock to be doubled...
 const TIMER_CLOCK_RATE: usize = 84_000_000;
 const SAMPLE_RATE: usize = 48_000;
@@ -48,6 +50,14 @@ fn main() -> ! {
         });
         rcc.apb2enr.modify(|_r, w| w.adc1en().set_bit())
     }
+
+    let coeffs = biquad::Coefficients::<f32>::from_params(
+        biquad::Type::LowPass,
+        biquad::Hertz::<f32>::from_hz(TIMER_RATE as f32).unwrap(),
+        biquad::Hertz::<f32>::from_hz(20_000.0).unwrap(),
+        biquad::Q_BUTTERWORTH_F32,
+    ).unwrap();
+    let mut filter = biquad::DirectForm2Transposed::<f32>::new(coeffs);
 
     let dma2 = peripherals.DMA2;
     let timer = peripherals.TIM2;
@@ -132,10 +142,13 @@ fn main() -> ! {
         // wait for the DMA buffer to fill up
         while adc_stream.cr.read().en().bit() {}
 
-        let new_sample = adc_buffer[this].iter().sum::<u16>() / SAMPLES_TO_AVERAGE as u16;
+        let mut new_sample = 0.0;
+        for i in &adc_buffer[this] {
+            new_sample = filter.run(*i as f32 / 4096.0);
+        }
 
         // write that sample 800ms into the future
-        buffer[(i + (SAMPLE_RATE * 800 / 1000)) % buffer.len()] = new_sample;
+        buffer[(i + (SAMPLE_RATE * 800 / 1000)) % buffer.len()] = (new_sample * 4096.0) as u16;
 
         // output to the DAC
         dac.dhr12r1

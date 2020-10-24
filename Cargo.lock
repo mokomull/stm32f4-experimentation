@@ -39,6 +39,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "biquad"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15345c5283a175d5923fa1452cf3f2cb929370c940529adfd804fb9859cee14f"
+dependencies = [
+ "libm",
+]
+
+[[package]]
 name = "cast"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -106,6 +115,12 @@ checksum = "0ed1e761351b56f54eb9dcd0cfaca9fd0daecf93918e1cfc01c8a3d26ee7adcd"
 dependencies = [
  "typenum",
 ]
+
+[[package]]
+name = "libm"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fc7aa29613bd6a620df431842069224d8bc9011086b1db4c0e0cd47fa03ec9a"
 
 [[package]]
 name = "lis302dl"
@@ -223,6 +238,7 @@ dependencies = [
 name = "stm32f4-experimentation"
 version = "0.1.0"
 dependencies = [
+ "biquad",
  "cortex-m",
  "cortex-m-rt",
  "embedded-hal",
