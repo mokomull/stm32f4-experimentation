@@ -56,8 +56,9 @@ fn main() -> ! {
         biquad::Hertz::<f32>::from_hz(TIMER_RATE as f32).unwrap(),
         biquad::Hertz::<f32>::from_hz(20_000.0).unwrap(),
         biquad::Q_BUTTERWORTH_F32,
-    ).unwrap();
-    let mut filter = biquad::DirectForm2Transposed::<f32>::new(coeffs);
+    )
+    .unwrap();
+    let mut filter = [biquad::DirectForm2Transposed::<f32>::new(coeffs); 6];
 
     let dma2 = peripherals.DMA2;
     let timer = peripherals.TIM2;
@@ -142,18 +143,6 @@ fn main() -> ! {
         // wait for the DMA buffer to fill up
         while adc_stream.cr.read().en().bit() {}
 
-        let mut new_sample = 0.0;
-        for i in &adc_buffer[this] {
-            new_sample = filter.run(*i as f32 / 4096.0);
-        }
-
-        // write that sample 800ms into the future
-        buffer[(i + (SAMPLE_RATE * 800 / 1000)) % buffer.len()] = (new_sample * 4096.0) as u16;
-
-        // output to the DAC
-        dac.dhr12r1
-            .write(|w| unsafe { w.dacc1dhr().bits(buffer[i]) });
-
         // set up DMA to the next adc_buffer
         adc_stream
             .m0ar
@@ -175,6 +164,21 @@ fn main() -> ! {
         adc.cr2.modify(|_r, w| w.dma().disabled());
         // and back on again
         adc.cr2.modify(|_r, w| w.dma().enabled());
+
+        let mut new_sample = 0.0;
+        for i in &adc_buffer[this] {
+            new_sample = *i as f32 / 4096.0;
+            for f in &mut filter {
+                new_sample = f.run(new_sample);
+            }
+        }
+
+        // write that sample 800ms into the future
+        buffer[(i + (SAMPLE_RATE * 800 / 1000)) % buffer.len()] = (new_sample * 4096.0) as u16;
+
+        // output to the DAC
+        dac.dhr12r1
+            .write(|w| unsafe { w.dacc1dhr().bits(buffer[i]) });
 
         // for sanity sake, make sure we didn't take too long computing the average
         if adc.sr.read().ovr().bit() {
