@@ -117,8 +117,6 @@ F 3 "~" H 3900 1600 50  0001 C CNN
 	0    1    1    0   
 $EndComp
 Wire Wire Line
-	2950 2900 2950 1600
-Wire Wire Line
 	4050 1600 4200 1600
 Wire Wire Line
 	4200 1600 4200 1250
@@ -190,10 +188,6 @@ Wire Wire Line
 	3100 1600 3150 1600
 Wire Wire Line
 	3450 1600 3750 1600
-Wire Wire Line
-	5750 2900 2950 2900
-Wire Wire Line
-	5750 3250 5750 2900
 $Comp
 L MCU_ST_STM32F4:STM32F407VGTx U2
 U 1 1 5F8D98D0
@@ -399,4 +393,51 @@ F 3 "" H 4400 1600 50  0001 C CNN
 	1    4400 1600
 	1    0    0    -1  
 $EndComp
+$Comp
+L Audio:CS43L21 U?
+U 1 1 5FF2C7AC
+P 3450 4400
+F 0 "U?" H 3450 3411 50  0000 C CNN
+F 1 "CS43L21" H 3450 3320 50  0000 C CNN
+F 2 "Package_DFN_QFN:QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm" H 3450 4400 50  0001 C CNN
+F 3 "https://d3uzseaevmutz1.cloudfront.net/pubs/proDatasheet/CS43L21_F1.pdf" H 3450 4400 50  0001 C CNN
+	1    3450 4400
+	1    0    0    -1  
+$EndComp
+$Comp
+L Device:CP C?
+U 1 1 5FF2FDCB
+P 2950 2450
+F 0 "C?" H 3068 2496 50  0000 L CNN
+F 1 "1u" H 3068 2405 50  0000 L CNN
+F 2 "" H 2988 2300 50  0001 C CNN
+F 3 "~" H 2950 2450 50  0001 C CNN
+	1    2950 2450
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	2950 1600 2950 2300
+Wire Wire Line
+	4150 3900 4250 3900
+Wire Wire Line
+	4250 3900 4250 3000
+Wire Wire Line
+	4250 3000 2950 3000
+Wire Wire Line
+	2950 3000 2950 2600
+$Comp
+L Graphic:SYM_Arrow45_Large #SYM?
+U 1 1 5FF35331
+P 4600 4250
+F 0 "#SYM?" H 4600 4410 50  0001 C CNN
+F 1 "SYM_Arrow45_Large" H 4600 4110 50  0001 C CNN
+F 2 "" H 4600 4250 50  0001 C CNN
+F 3 "~" H 4600 4250 50  0001 C CNN
+	1    4600 4250
+	0    1    1    0   
+$EndComp
+Text Notes 4300 4100 0    50   ~ 0
+I2C and SPI (I2S)\nsignals from the\nSTM32 to the DAC
+Text Notes 4300 4650 0    50   ~ 0
+as built-in on the\nSTM32F407G-DISC1\nboard
 $EndSCHEMATC
