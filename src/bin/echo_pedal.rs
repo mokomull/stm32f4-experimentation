@@ -126,7 +126,7 @@ fn main() -> ! {
     adc.cr1.write(|w| w.res().twelve_bit());
     adc.cr2.write(|w| {
         w.exten().disabled();
-        w.align().right();
+        w.align().left();
         w.dma().disabled();
         w.cont().continuous();
         w.adon().enabled()
