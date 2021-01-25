@@ -243,6 +243,7 @@ dependencies = [
  "cortex-m-rt",
  "embedded-hal",
  "micromath",
+ "nb",
  "panic-itm",
  "static_assertions",
  "stm32f407g-disc",

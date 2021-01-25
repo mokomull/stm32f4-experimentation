@@ -38,7 +38,7 @@ fn main() -> ! {
     let control_sck = portc.pc10.into_alternate_af6();
     let control_mosi = portc.pc12.into_alternate_af6();
     let _control_nss = porta.pa4.into_alternate_af6();
-    let control_csb = portc.pc11.into_push_pull_output();
+    let mut control_csb = portc.pc11.into_push_pull_output();
 
     // enable the DAC peripheral
     unsafe {
@@ -81,7 +81,7 @@ fn main() -> ! {
     });
     audio.i2scfgr.modify(|_r, w| w.i2se().set_bit());
 
-    let control = stm32f4xx_hal::spi::Spi::spi3(
+    let mut control = stm32f4xx_hal::spi::Spi::spi3(
         peripherals.SPI3,
         (control_sck, NoMiso, control_mosi),
         spi::Mode {
@@ -91,6 +91,8 @@ fn main() -> ! {
         200.khz().into(),
         clocks,
     );
+
+    set_codec_register(&mut control, &mut control_csb, 0x9 /* active */, 0x1);
 
     // buffer that can hold a second of data
     let mut buffer = [0u16; SAMPLE_RATE];
@@ -116,4 +118,34 @@ fn main() -> ! {
     }
 
     panic!("cycle() should never complete");
+}
+
+fn set_codec_register<SPI, GPIO>(spi: &mut SPI, not_cs: &mut GPIO, register: u8, value: u8)
+where
+    SPI: embedded_hal::spi::FullDuplex<u8>,
+    SPI::Error: core::fmt::Debug,
+    GPIO: embedded_hal::digital::v2::OutputPin,
+    GPIO::Error: core::fmt::Debug,
+{
+    not_cs.set_low().unwrap();
+    spi.send(register)
+        .expect("sending the address should always work");
+
+    loop {
+        match spi.send(value) {
+            Ok(()) => break,
+            Err(nb::Error::WouldBlock) => (),
+            Err(x) => panic!("unexpected SPI error: {:?}", x),
+        }
+    }
+
+    loop {
+        match spi.read() {
+            Ok(_) => (),
+            Err(nb::Error::WouldBlock) => break,
+            Err(x) => panic!("unexpected SPI error while waiting for completion: {:?}", x),
+        }
+    }
+
+    not_cs.set_high().unwrap();
 }
