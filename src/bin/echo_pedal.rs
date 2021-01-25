@@ -40,6 +40,8 @@ fn main() -> ! {
     let _control_nss = porta.pa4.into_alternate_af6();
     let mut control_csb = portc.pc11.into_push_pull_output();
 
+    control_csb.set_high().unwrap();
+
     // enable the DAC peripheral
     unsafe {
         let rcc = &*stm32::RCC::ptr();
@@ -122,30 +124,14 @@ fn main() -> ! {
 
 fn set_codec_register<SPI, GPIO>(spi: &mut SPI, not_cs: &mut GPIO, register: u8, value: u8)
 where
-    SPI: embedded_hal::spi::FullDuplex<u8>,
+    SPI: embedded_hal::blocking::spi::Write<u8>,
     SPI::Error: core::fmt::Debug,
     GPIO: embedded_hal::digital::v2::OutputPin,
     GPIO::Error: core::fmt::Debug,
 {
     not_cs.set_low().unwrap();
-    spi.send(register)
-        .expect("sending the address should always work");
 
-    loop {
-        match spi.send(value) {
-            Ok(()) => break,
-            Err(nb::Error::WouldBlock) => (),
-            Err(x) => panic!("unexpected SPI error: {:?}", x),
-        }
-    }
-
-    loop {
-        match spi.read() {
-            Ok(_) => (),
-            Err(nb::Error::WouldBlock) => break,
-            Err(x) => panic!("unexpected SPI error while waiting for completion: {:?}", x),
-        }
-    }
+    embedded_hal::blocking::spi::Write::write(spi, &[register, value]).expect("SPI write failed");
 
     not_cs.set_high().unwrap();
 }
