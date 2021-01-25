@@ -4,6 +4,7 @@
 use cortex_m_rt::entry;
 use panic_itm as _;
 
+use stm32f407g_disc::spi::{self, NoMiso};
 use stm32f4xx_hal::prelude::*;
 
 use stm32f4xx_hal::stm32;
@@ -13,9 +14,6 @@ use stm32::spi1::i2scfgr;
 // approximate!  This will actually run a fraction of a percent slow, due to I2S clocking
 // constraints.
 const SAMPLE_RATE: usize = 48_000;
-
-// fixed address of the DAC on the I2C bus
-const ADDRESS: u8 = 0x94 >> 1;
 
 #[entry]
 fn main() -> ! {
@@ -30,14 +28,17 @@ fn main() -> ! {
     let porta = peripherals.GPIOA.split();
     let portb = peripherals.GPIOB.split();
     let portc = peripherals.GPIOC.split();
-    let portd = peripherals.GPIOD.split();
 
-    let _signal_in = porta.pa0.into_analog();
+    let _audio_mck = portc.pc6.into_alternate_af5();
+    let _audio_sck = portb.pb10.into_alternate_af5();
+    let _audio_sd_out = portc.pc3.into_alternate_af5();
+    let _audio_sd_in = portc.pc2.into_alternate_af6();
+    let _audio_ws = portb.pb9.into_alternate_af5();
 
-    let _mck = portc.pc7.into_alternate_af6();
-    let _sck = portc.pc10.into_alternate_af6();
-    let _sd = portc.pc12.into_alternate_af6();
-    let _ws = porta.pa4.into_alternate_af6();
+    let control_sck = portc.pc10.into_alternate_af6();
+    let control_mosi = portc.pc12.into_alternate_af6();
+    let _control_nss = porta.pa4.into_alternate_af6();
+    let control_csb = portc.pc11.into_push_pull_output();
 
     // enable the DAC peripheral
     unsafe {
@@ -53,10 +54,7 @@ fn main() -> ! {
         rcc.cr.modify(|_r, w| w.plli2son().set_bit());
         while !rcc.cr.read().plli2srdy().bit() {}
 
-        rcc.apb1enr.modify(|_r, w| {
-            w.dacen().set_bit();
-            w.spi3en().set_bit()
-        });
+        rcc.apb1enr.modify(|_r, w| w.spi2en().set_bit());
         rcc.ahb1enr.modify(|_r, w| {
             w.dma1en().set_bit();
             w.dma2en().set_bit()
@@ -64,103 +62,58 @@ fn main() -> ! {
         rcc.apb2enr.modify(|_r, w| w.adc1en().set_bit())
     }
 
-    let spi = peripherals.SPI3;
-    spi.i2scfgr.write(|w| {
+    let audio = peripherals.SPI2;
+    audio.i2scfgr.write(|w| {
         w.i2smod().set_bit();
         w.i2scfg().variant(i2scfgr::I2SCFG_A::MASTERTX);
         w.i2sstd().variant(i2scfgr::I2SSTD_A::MSB);
         w.ckpol().set_bit();
-        w.datlen().variant(i2scfgr::DATLEN_A::SIXTEENBIT);
-        w.chlen().variant(i2scfgr::CHLEN_A::SIXTEENBIT)
+        w.datlen().variant(i2scfgr::DATLEN_A::TWENTYFOURBIT);
+        w.chlen().variant(i2scfgr::CHLEN_A::THIRTYTWOBIT)
     });
     // 86MHz / (3 * 2 + 1) = 12.2857MHz MCK
     // 12.2857MHz / 8 [fixed in hardware] = 1.53571MHz bit clock
     // 1.53571MHz / (2 channels * 16 bits per sample) = 47.9911k samples per sec
-    spi.i2spr.write(|w| {
+    audio.i2spr.write(|w| {
         w.mckoe().set_bit();
         unsafe { w.i2sdiv().bits(3) };
         w.odd().set_bit()
     });
-    spi.i2scfgr.modify(|_r, w| w.i2se().set_bit());
+    audio.i2scfgr.modify(|_r, w| w.i2se().set_bit());
 
-    let mut audio_reset = portd.pd4.into_push_pull_output();
-    audio_reset.set_high().unwrap();
-    let mut i2c = stm32f4xx_hal::i2c::I2c::i2c1(
-        peripherals.I2C1,
-        (
-            portb.pb6.into_alternate_af4_open_drain(),
-            portb.pb9.into_alternate_af4_open_drain(),
-        ),
-        50.khz(),
+    let control = stm32f4xx_hal::spi::Spi::spi3(
+        peripherals.SPI3,
+        (control_sck, NoMiso, control_mosi),
+        spi::Mode {
+            phase: spi::Phase::CaptureOnSecondTransition,
+            polarity: spi::Polarity::IdleHigh,
+        },
+        200.khz().into(),
         clocks,
     );
-
-    set_dac_register(&mut i2c, 0x04, 0xaf); // headphone channels ON, speaker channels OFF
-    set_dac_register(&mut i2c, 0x05, 0x80); // auto = 1, everything else 0
-    set_dac_register(&mut i2c, 0x06, 0x00); // I2S slave, not inverted, not DSP mode, left justified format
-    set_dac_register(&mut i2c, 0x07, 0x00); // leave Interface Control 2 alone
-
-    // section 4.11 from the CS43L22 datasheet
-    set_dac_register(&mut i2c, 0x00, 0x99);
-    set_dac_register(&mut i2c, 0x47, 0x80);
-    set_dac_register(&mut i2c, 0x32, 0x80);
-    set_dac_register(&mut i2c, 0x32, 0x00);
-
-    // step 6 of 4.9 of CS43L22 datasheet
-    set_dac_register(&mut i2c, 0x02, 0x9e);
-
-    let adc = peripherals.ADC1;
 
     // buffer that can hold a second of data
     let mut buffer = [0u16; SAMPLE_RATE];
 
-    // run the ADC on TIM2_TRGO (that is: at TIMER_RATE samples/sec) and have it request DMA.
-    // only want one measurement each clock, from channel 0
-    adc.sqr1
-        .write(|w| w.l().bits(0 /* datasheet says "0b0000: 1 conversion" */));
-    adc.sqr3.write(|w| unsafe { w.sq1().bits(0) });
-    // run the ADC clock at pclk2 (84MHz) / 8 = 10.5MHz.  That's now within the datasheet tolerance
-    // for the ADC, and plenty fast to take one sample 48k times per second.
-    peripherals.ADC_COMMON.ccr.modify(|_r, w| w.adcpre().div8());
-    // set up the ADC for 12-bit samples, continuous
-    adc.cr1.write(|w| w.res().twelve_bit());
-    adc.cr2.write(|w| {
-        w.exten().disabled();
-        w.align().left();
-        w.dma().disabled();
-        w.cont().continuous();
-        w.adon().enabled()
-    });
-    // and kick off the ADC
-    adc.cr2.modify(|_r, w| w.swstart().start());
-
     for i in (0..buffer.len()).cycle() {
         // wait for the SPI peripheral to need another sample
-        while !spi.sr.read().txe().bit() {}
+        while !audio.sr.read().txe().bit() {}
 
         // give it another sample
-        spi.dr.write(|w| w.dr().bits(buffer[i]));
+        audio.dr.write(|w| w.dr().bits(buffer[i]));
 
         // and while we're waiting for that to get clocked-out, grab the current value from the ADC
-        let new_sample = adc.dr.read().data().bits();
+        // TODO: actually read samples from the codec
+        // let new_sample = adc.dr.read().data().bits();
+        let new_sample = 0;
 
         // wait for the SPI peripheral to need the same sample for the other channel
-        while !spi.sr.read().txe().bit() {}
-        spi.dr.write(|w| w.dr().bits(buffer[i]));
+        while !audio.sr.read().txe().bit() {}
+        audio.dr.write(|w| w.dr().bits(buffer[i]));
 
         // write that sample 800ms into the future
         buffer[(i + (SAMPLE_RATE * 800 / 1000)) % buffer.len()] = new_sample;
     }
 
     panic!("cycle() should never complete");
-}
-
-use embedded_hal::blocking::i2c;
-
-fn set_dac_register<I>(i2c: &mut I, register: u8, value: u8)
-where
-    I: i2c::Write,
-    I::Error: core::fmt::Debug,
-{
-    i2c.write(ADDRESS, &[register, value]).unwrap();
 }
