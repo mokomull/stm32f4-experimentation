@@ -94,7 +94,36 @@ fn main() -> ! {
         clocks,
     );
 
+    set_codec_register(
+        &mut control,
+        &mut control_csb,
+        0x6, /* power down */
+        0x27,
+    );
     set_codec_register(&mut control, &mut control_csb, 0x9 /* active */, 0x1);
+
+    let sines = [
+        8388607, 9483539, 10559738, 11598787, 12582910, 13495267, 14320247, 15043736, 15653353,
+        16138669, 16491379, 16705448, 16777214, 16705448, 16491379, 16138669, 15653353, 15043736,
+        14320247, 13495267, 12582910, 11598787, 10559738, 9483539, 8388607, 7293674, 6217475,
+        5178426, 4194303, 3281946, 2456966, 1733477, 1123860, 638544, 285834, 71765, 0, 71765,
+        285834, 638544, 1123860, 1733477, 2456966, 3281946, 4194303, 5178426, 6217475, 7293674,
+    ];
+
+    loop {
+        for sample in &sines {
+            for _channel in 0..2 {
+                while !audio.sr.read().txe().bit() {}
+                audio
+                    .dr
+                    .write(|w| w.dr().bits((*sample & 0xffff00 >> 8) as u16));
+                while !audio.sr.read().txe().bit() {}
+                audio
+                    .dr
+                    .write(|w| w.dr().bits((*sample & 0xff << 8) as u16));
+            }
+        }
+    }
 
     // buffer that can hold a second of data
     let mut buffer = [0u16; SAMPLE_RATE];
