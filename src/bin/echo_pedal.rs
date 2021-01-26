@@ -134,11 +134,11 @@ fn main() -> ! {
                 while !audio.sr.read().txe().bit() {}
                 audio
                     .dr
-                    .write(|w| w.dr().bits((*sample & 0xffff00 >> 8) as u16));
+                    .write(|w| w.dr().bits(((*sample & 0xffff00) >> 8) as u16));
                 while !audio.sr.read().txe().bit() {}
                 audio
                     .dr
-                    .write(|w| w.dr().bits((*sample & 0xff << 8) as u16));
+                    .write(|w| w.dr().bits(((*sample & 0xff) << 8) as u16));
             }
         }
     }
