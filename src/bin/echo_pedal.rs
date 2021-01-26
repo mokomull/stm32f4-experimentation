@@ -68,8 +68,8 @@ fn main() -> ! {
     audio.i2scfgr.write(|w| {
         w.i2smod().set_bit();
         w.i2scfg().variant(i2scfgr::I2SCFG_A::MASTERTX);
-        w.i2sstd().variant(i2scfgr::I2SSTD_A::MSB);
-        w.ckpol().set_bit();
+        w.i2sstd().variant(i2scfgr::I2SSTD_A::PHILIPS);
+        w.ckpol().clear_bit();
         w.datlen().variant(i2scfgr::DATLEN_A::TWENTYFOURBIT);
         w.chlen().variant(i2scfgr::CHLEN_A::THIRTYTWOBIT)
     });
