@@ -96,6 +96,7 @@ fn main() -> ! {
     let mut control = Control {
         spi: control_spi,
         not_cs: control_csb,
+        delay: stm32f4xx_hal::delay::Delay::new(core_peripherals.SYST, clocks),
     };
 
     control.set_register(0xf /* reset */, 0);
@@ -151,17 +152,19 @@ fn main() -> ! {
     panic!("cycle() should never complete");
 }
 
-struct Control<SPI, GPIO> {
+struct Control<SPI, GPIO, DELAY> {
     spi: SPI,
     not_cs: GPIO,
+    delay: DELAY,
 }
 
-impl<SPI, GPIO> Control<SPI, GPIO>
+impl<SPI, GPIO, DELAY> Control<SPI, GPIO, DELAY>
 where
     SPI: embedded_hal::blocking::spi::Write<u8>,
     SPI::Error: core::fmt::Debug,
     GPIO: embedded_hal::digital::v2::OutputPin,
     GPIO::Error: core::fmt::Debug,
+    DELAY: embedded_hal::blocking::delay::DelayUs<u8>,
 {
     fn set_register(&mut self, register: u8, value: u16) {
         self.not_cs.set_low().unwrap();
@@ -176,5 +179,8 @@ where
         .expect("SPI write failed");
 
         self.not_cs.set_high().unwrap();
+
+        // t_CSH is minimum 20ns per the datasheet, so 1µs should be fine
+        self.delay.delay_us(1);
     }
 }
