@@ -100,8 +100,25 @@ fn main() -> ! {
     };
 
     control.set_register(0xf /* reset */, 0);
-    control.set_register(0x6 /* power down */, 0x27);
+    control.set_register(0x6 /* power down */, 0b0_0111_0111);
+
+    // sidetone off; DAC selected; bypass off; line input selected; mic muted; mic boost off
+    control.set_register(0x4 /* analogue audio path */, 0b0_0001_0010);
+
+    // disable DAC mute, deemphasis for 48k
+    control.set_register(0x5 /* digital audio path */, 0b0_0000_0110);
+
+    // nothing inverted, slave, 24-bits, I²S format
+    control.set_register(0x7 /* digital audio interface */, 0b0_0000_1010);
+
+    // no clock division, normal mode, 48k
+    control.set_register(0x8 /* sampling control */, 0b0_00_0000_00);
+
+    // set active
     control.set_register(0x9 /* active */, 0x1);
+
+    // enable output
+    control.set_register(0x6 /* power down */, 0b0_0110_0111);
 
     let sines = [
         8388607, 9483539, 10559738, 11598787, 12582910, 13495267, 14320247, 15043736, 15653353,
