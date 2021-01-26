@@ -94,6 +94,7 @@ fn main() -> ! {
         clocks,
     );
 
+    set_codec_register(&mut control, &mut control_csb, 0xf /* reset */, 0);
     set_codec_register(
         &mut control,
         &mut control_csb,
