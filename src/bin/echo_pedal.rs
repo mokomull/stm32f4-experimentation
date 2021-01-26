@@ -151,7 +151,7 @@ fn main() -> ! {
     panic!("cycle() should never complete");
 }
 
-fn set_codec_register<SPI, GPIO>(spi: &mut SPI, not_cs: &mut GPIO, register: u8, value: u8)
+fn set_codec_register<SPI, GPIO>(spi: &mut SPI, not_cs: &mut GPIO, register: u8, value: u16)
 where
     SPI: embedded_hal::blocking::spi::Write<u8>,
     SPI::Error: core::fmt::Debug,
@@ -160,7 +160,14 @@ where
 {
     not_cs.set_low().unwrap();
 
-    embedded_hal::blocking::spi::Write::write(spi, &[register, value]).expect("SPI write failed");
+    embedded_hal::blocking::spi::Write::write(
+        spi,
+        &[
+            (register << 1) | ((value & 0x100) >> 8) as u8,
+            (value & 0xff) as u8,
+        ],
+    )
+    .expect("SPI write failed");
 
     not_cs.set_high().unwrap();
 }
