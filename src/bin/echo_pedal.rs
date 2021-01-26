@@ -83,7 +83,7 @@ fn main() -> ! {
     });
     audio.i2scfgr.modify(|_r, w| w.i2se().set_bit());
 
-    let mut control = stm32f4xx_hal::spi::Spi::spi3(
+    let control_spi = stm32f4xx_hal::spi::Spi::spi3(
         peripherals.SPI3,
         (control_sck, NoMiso, control_mosi),
         spi::Mode {
@@ -93,15 +93,14 @@ fn main() -> ! {
         200.khz().into(),
         clocks,
     );
+    let mut control = Control {
+        spi: control_spi,
+        not_cs: control_csb,
+    };
 
-    set_codec_register(&mut control, &mut control_csb, 0xf /* reset */, 0);
-    set_codec_register(
-        &mut control,
-        &mut control_csb,
-        0x6, /* power down */
-        0x27,
-    );
-    set_codec_register(&mut control, &mut control_csb, 0x9 /* active */, 0x1);
+    control.set_register(0xf /* reset */, 0);
+    control.set_register(0x6 /* power down */, 0x27);
+    control.set_register(0x9 /* active */, 0x1);
 
     let sines = [
         8388607, 9483539, 10559738, 11598787, 12582910, 13495267, 14320247, 15043736, 15653353,
@@ -152,23 +151,30 @@ fn main() -> ! {
     panic!("cycle() should never complete");
 }
 
-fn set_codec_register<SPI, GPIO>(spi: &mut SPI, not_cs: &mut GPIO, register: u8, value: u16)
+struct Control<SPI, GPIO> {
+    spi: SPI,
+    not_cs: GPIO,
+}
+
+impl<SPI, GPIO> Control<SPI, GPIO>
 where
     SPI: embedded_hal::blocking::spi::Write<u8>,
     SPI::Error: core::fmt::Debug,
     GPIO: embedded_hal::digital::v2::OutputPin,
     GPIO::Error: core::fmt::Debug,
 {
-    not_cs.set_low().unwrap();
+    fn set_register(&mut self, register: u8, value: u16) {
+        self.not_cs.set_low().unwrap();
 
-    embedded_hal::blocking::spi::Write::write(
-        spi,
-        &[
-            (register << 1) | ((value & 0x100) >> 8) as u8,
-            (value & 0xff) as u8,
-        ],
-    )
-    .expect("SPI write failed");
+        embedded_hal::blocking::spi::Write::write(
+            &mut self.spi,
+            &[
+                (register << 1) | ((value & 0x100) >> 8) as u8,
+                (value & 0xff) as u8,
+            ],
+        )
+        .expect("SPI write failed");
 
-    not_cs.set_high().unwrap();
+        self.not_cs.set_high().unwrap();
+    }
 }
