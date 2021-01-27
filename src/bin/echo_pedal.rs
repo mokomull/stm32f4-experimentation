@@ -155,9 +155,6 @@ fn main() -> ! {
                     bot_buffer[rx_i] = audio_rx.dr.read().dr().bits();
                     // receiving samples from the codec is what drives the indexing forward
                     rx_i = (rx_i + 1) % top_buffer.len();
-
-                    // DO NOT COMMIT: stop after the buffer
-                    assert_ne!(rx_i, 0);
                 }
             } else {
                 // do nothing with the right channel
