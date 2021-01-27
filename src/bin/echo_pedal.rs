@@ -100,7 +100,7 @@ fn main() -> ! {
     };
 
     control.set_register(0xf /* reset */, 0);
-    control.set_register(0x6 /* power down */, 0b0_0111_0111);
+    control.set_register(0x6 /* power down */, 0b0_0111_0011);
 
     // sidetone off; DAC selected; bypass off; line input selected; mic muted; mic boost off
     control.set_register(0x4 /* analogue audio path */, 0b0_0001_0010);
@@ -118,7 +118,7 @@ fn main() -> ! {
     control.set_register(0x9 /* active */, 0x1);
 
     // enable output
-    control.set_register(0x6 /* power down */, 0b0_0110_0111);
+    control.set_register(0x6 /* power down */, 0b0_0110_0011);
 
     let sines = [
         0, 1094932, 2171131, 3210180, 4194303, 5106660, 5931640, 6655129, 7264746, 7750062,
