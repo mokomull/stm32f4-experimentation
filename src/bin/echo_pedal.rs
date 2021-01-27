@@ -64,8 +64,8 @@ fn main() -> ! {
         rcc.apb2enr.modify(|_r, w| w.adc1en().set_bit())
     }
 
-    let audio = peripherals.SPI2;
-    audio.i2scfgr.write(|w| {
+    let audio_tx = peripherals.SPI2;
+    audio_tx.i2scfgr.write(|w| {
         w.i2smod().set_bit();
         w.i2scfg().variant(i2scfgr::I2SCFG_A::MASTERTX);
         w.i2sstd().variant(i2scfgr::I2SSTD_A::MSB);
@@ -76,12 +76,23 @@ fn main() -> ! {
     // 86MHz / (3 * 2 + 1) = 12.2857MHz MCK
     // 12.2857MHz / 8 [fixed in hardware] = 1.53571MHz bit clock
     // 1.53571MHz / (2 channels * 16 bits per sample) = 47.9911k samples per sec
-    audio.i2spr.write(|w| {
+    audio_tx.i2spr.write(|w| {
         w.mckoe().set_bit();
         unsafe { w.i2sdiv().bits(3) };
         w.odd().set_bit()
     });
-    audio.i2scfgr.modify(|_r, w| w.i2se().set_bit());
+    audio_tx.i2scfgr.modify(|_r, w| w.i2se().set_bit());
+
+    let audio_rx = peripherals.I2S2EXT;
+    audio_rx.i2scfgr.write(|w| {
+        w.i2smod().set_bit();
+        w.i2scfg().slave_rx();
+        w.i2sstd().msb();
+        w.ckpol().clear_bit();
+        w.datlen().twenty_four_bit();
+        w.chlen().thirty_two_bit()
+    });
+    audio_rx.i2scfgr.modify(|_r, w| w.i2se().set_bit());
 
     let control_spi = stm32f4xx_hal::spi::Spi::spi3(
         peripherals.SPI3,
@@ -120,50 +131,58 @@ fn main() -> ! {
     // enable output
     control.set_register(0x6 /* power down */, 0b0_0110_0011);
 
-    let sines = [
-        0, 1094932, 2171131, 3210180, 4194303, 5106660, 5931640, 6655129, 7264746, 7750062,
-        8102772, 8316841, 8388607, 8316841, 8102772, 7750062, 7264746, 6655129, 5931640, 5106660,
-        4194303, 3210180, 2171131, 1094932, 0, 15682284, 14606085, 13567036, 12582913, 11670556,
-        10845576, 10122087, 9512470, 9027154, 8674444, 8460375, 8388609, 8460375, 8674444, 9027154,
-        9512470, 10122087, 10845576, 11670556, 12582913, 13567036, 14606085, 15682284,
-    ];
+    // buffer that can hold a half second of data
+    let mut top_buffer = [0u16; SAMPLE_RATE / 2];
+    let mut bot_buffer = [0u16; SAMPLE_RATE / 2];
 
-    loop {
-        for sample in &sines {
-            for _channel in 0..2 {
-                while !audio.sr.read().txe().bit() {}
-                audio
-                    .dr
-                    .write(|w| w.dr().bits(((*sample & 0xffff00) >> 8) as u16));
-                while !audio.sr.read().txe().bit() {}
-                audio
-                    .dr
-                    .write(|w| w.dr().bits(((*sample & 0xff) << 8) as u16));
+    assert_eq!(top_buffer.len(), bot_buffer.len());
+
+    let mut top_txed = false;
+    let mut top_rxed = false;
+
+    'outer: for i in (0..top_buffer.len()).cycle() {
+        let future_i = (i + (SAMPLE_RATE * 800 / 1000)) % top_buffer.len();
+
+        loop {
+            // dispatch the receive and transmit actions as they're ready
+
+            let rx = audio_rx.sr.read();
+            if rx.rxne().bit_is_set() {
+                if rx.chside().is_left() {
+                    if !top_rxed {
+                        top_buffer[future_i] = audio_rx.dr.read().dr().bits();
+                        top_rxed = true;
+                    } else {
+                        bot_buffer[future_i] = audio_rx.dr.read().dr().bits();
+                        top_rxed = false;
+                        // receiving samples from the codec is what drives the indexing forward
+                        continue 'outer;
+                    }
+                } else {
+                    // do nothing with the right channel
+                    audio_rx.dr.read();
+                }
+            }
+            core::mem::drop(rx);
+
+            let tx = audio_tx.sr.read();
+            if tx.txe().bit_is_set() {
+                // TODO: I have no idea which part is lying to me, but experimentally, I
+                // accidentally probed the "wrong" output pin and it started working (ish).
+                if tx.chside().is_right() {
+                    if !top_txed {
+                        audio_tx.dr.write(|w| w.dr().bits(top_buffer[i]));
+                        top_txed = true;
+                    } else {
+                        audio_tx.dr.write(|w| w.dr().bits(bot_buffer[i]));
+                        top_txed = false;
+                    }
+                } else {
+                    // send nothing to the right channel
+                    audio_tx.dr.write(|w| w.dr().bits(0));
+                }
             }
         }
-    }
-
-    // buffer that can hold a second of data
-    let mut buffer = [0u16; SAMPLE_RATE];
-
-    for i in (0..buffer.len()).cycle() {
-        // wait for the SPI peripheral to need another sample
-        while !audio.sr.read().txe().bit() {}
-
-        // give it another sample
-        audio.dr.write(|w| w.dr().bits(buffer[i]));
-
-        // and while we're waiting for that to get clocked-out, grab the current value from the ADC
-        // TODO: actually read samples from the codec
-        // let new_sample = adc.dr.read().data().bits();
-        let new_sample = 0;
-
-        // wait for the SPI peripheral to need the same sample for the other channel
-        while !audio.sr.read().txe().bit() {}
-        audio.dr.write(|w| w.dr().bits(buffer[i]));
-
-        // write that sample 800ms into the future
-        buffer[(i + (SAMPLE_RATE * 800 / 1000)) % buffer.len()] = new_sample;
     }
 
     panic!("cycle() should never complete");
