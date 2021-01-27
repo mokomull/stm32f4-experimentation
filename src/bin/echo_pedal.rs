@@ -64,6 +64,17 @@ fn main() -> ! {
         rcc.apb2enr.modify(|_r, w| w.adc1en().set_bit())
     }
 
+    let audio_rx = peripherals.I2S2EXT;
+    audio_rx.i2scfgr.write(|w| {
+        w.i2smod().set_bit();
+        w.i2scfg().slave_rx();
+        w.i2sstd().msb();
+        w.ckpol().clear_bit();
+        w.datlen().twenty_four_bit();
+        w.chlen().thirty_two_bit()
+    });
+    audio_rx.i2scfgr.modify(|_r, w| w.i2se().set_bit());
+
     let audio_tx = peripherals.SPI2;
     audio_tx.i2scfgr.write(|w| {
         w.i2smod().set_bit();
@@ -82,17 +93,6 @@ fn main() -> ! {
         w.odd().set_bit()
     });
     audio_tx.i2scfgr.modify(|_r, w| w.i2se().set_bit());
-
-    let audio_rx = peripherals.I2S2EXT;
-    audio_rx.i2scfgr.write(|w| {
-        w.i2smod().set_bit();
-        w.i2scfg().slave_rx();
-        w.i2sstd().msb();
-        w.ckpol().clear_bit();
-        w.datlen().twenty_four_bit();
-        w.chlen().thirty_two_bit()
-    });
-    audio_rx.i2scfgr.modify(|_r, w| w.i2se().set_bit());
 
     let control_spi = stm32f4xx_hal::spi::Spi::spi3(
         peripherals.SPI3,
@@ -132,60 +132,61 @@ fn main() -> ! {
     control.set_register(0x6 /* power down */, 0b0_0110_0011);
 
     // buffer that can hold a half second of data
-    let mut top_buffer = [0u16; SAMPLE_RATE / 2];
-    let mut bot_buffer = [0u16; SAMPLE_RATE / 2];
+    let mut top_buffer = [0u16; 16];
+    let mut bot_buffer = [0u16; 16];
 
     assert_eq!(top_buffer.len(), bot_buffer.len());
 
-    let mut top_txed = false;
-    let mut top_rxed = false;
+    let mut last_txside = false;
+    let mut last_rxside = false;
 
-    'outer: for i in (0..top_buffer.len()).cycle() {
-        let future_i = (i + (SAMPLE_RATE * 800 / 1000)) % top_buffer.len();
+    let mut rx_i = 0;
+    let mut tx_i = top_buffer.len() - 2;
 
-        loop {
-            // dispatch the receive and transmit actions as they're ready
+    loop {
+        // dispatch the receive and transmit actions as they're ready
 
-            let rx = audio_rx.sr.read();
-            if rx.rxne().bit_is_set() {
-                if rx.chside().is_left() {
-                    if !top_rxed {
-                        top_buffer[future_i] = audio_rx.dr.read().dr().bits();
-                        top_rxed = true;
-                    } else {
-                        bot_buffer[future_i] = audio_rx.dr.read().dr().bits();
-                        top_rxed = false;
-                        // receiving samples from the codec is what drives the indexing forward
-                        continue 'outer;
-                    }
+        let rx = audio_rx.sr.read();
+        if rx.rxne().bit_is_set() {
+            if rx.chside().is_left() {
+                if rx.chside().bit() != last_rxside {
+                    top_buffer[rx_i] = audio_rx.dr.read().dr().bits();
                 } else {
-                    // do nothing with the right channel
-                    audio_rx.dr.read();
-                }
-            }
-            core::mem::drop(rx);
+                    bot_buffer[rx_i] = audio_rx.dr.read().dr().bits();
+                    // receiving samples from the codec is what drives the indexing forward
+                    rx_i = (rx_i + 1) % top_buffer.len();
 
-            let tx = audio_tx.sr.read();
-            if tx.txe().bit_is_set() {
-                // TODO: I have no idea which part is lying to me, but experimentally, I
-                // accidentally probed the "wrong" output pin and it started working (ish).
-                if tx.chside().is_right() {
-                    if !top_txed {
-                        audio_tx.dr.write(|w| w.dr().bits(top_buffer[i]));
-                        top_txed = true;
-                    } else {
-                        audio_tx.dr.write(|w| w.dr().bits(bot_buffer[i]));
-                        top_txed = false;
-                    }
-                } else {
-                    // send nothing to the right channel
-                    audio_tx.dr.write(|w| w.dr().bits(0));
+                    // DO NOT COMMIT: stop after the buffer
+                    assert_ne!(rx_i, 0);
                 }
+            } else {
+                // do nothing with the right channel
+                audio_rx.dr.read();
             }
+
+            last_rxside = rx.chside().bit();
+        }
+        core::mem::drop(rx);
+
+        let tx = audio_tx.sr.read();
+        if tx.txe().bit_is_set() {
+            // TODO: I have no idea which part is lying to me, but experimentally, I
+            // accidentally probed the "wrong" output pin and it started working (ish).
+            if tx.chside().is_right() {
+                if tx.chside().bit() != last_txside {
+                    audio_tx.dr.write(|w| w.dr().bits(top_buffer[tx_i]));
+                } else {
+                    audio_tx.dr.write(|w| w.dr().bits(bot_buffer[tx_i]));
+                    tx_i = (tx_i + 1) % top_buffer.len();
+                }
+            } else {
+                // send nothing to the right channel
+                audio_tx.dr.write(|w| w.dr().bits(0));
+            }
+
+            last_txside = tx.chside().bit();
         }
     }
-
-    panic!("cycle() should never complete");
 }
 
 struct Control<SPI, GPIO, DELAY> {
