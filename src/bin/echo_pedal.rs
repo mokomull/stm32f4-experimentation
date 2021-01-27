@@ -68,7 +68,7 @@ fn main() -> ! {
     audio.i2scfgr.write(|w| {
         w.i2smod().set_bit();
         w.i2scfg().variant(i2scfgr::I2SCFG_A::MASTERTX);
-        w.i2sstd().variant(i2scfgr::I2SSTD_A::PHILIPS);
+        w.i2sstd().variant(i2scfgr::I2SSTD_A::MSB);
         w.ckpol().clear_bit();
         w.datlen().variant(i2scfgr::DATLEN_A::TWENTYFOURBIT);
         w.chlen().variant(i2scfgr::CHLEN_A::THIRTYTWOBIT)
@@ -108,8 +108,8 @@ fn main() -> ! {
     // disable DAC mute, deemphasis for 48k
     control.set_register(0x5 /* digital audio path */, 0b0_0000_0110);
 
-    // nothing inverted, slave, 24-bits, I²S format
-    control.set_register(0x7 /* digital audio interface */, 0b0_0000_1010);
+    // nothing inverted, slave, 24-bits, MSB format
+    control.set_register(0x7 /* digital audio interface */, 0b0_0000_1001);
 
     // no clock division, normal mode, 48k
     control.set_register(0x8 /* sampling control */, 0b0_00_0000_00);
