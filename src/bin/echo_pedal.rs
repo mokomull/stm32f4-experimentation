@@ -132,56 +132,81 @@ fn main() -> ! {
     control.set_register(0x6 /* power down */, 0b0_0110_0011);
 
     // buffer that can hold a half second of data
-    let mut top_buffer = [0u16; 16];
-    let mut bot_buffer = [0u16; 16];
+    let mut top_buffer = [0u16; SAMPLE_RATE / 2];
+    let mut bot_buffer = [0u16; SAMPLE_RATE / 2];
 
     assert_eq!(top_buffer.len(), bot_buffer.len());
 
-    let mut last_txside = false;
-    let mut last_rxside = false;
+    let mut rx_i = (SAMPLE_RATE * 800 / 1000) % top_buffer.len();
+    let mut tx_i = 0;
 
-    let mut rx_i = 0;
-    let mut tx_i = top_buffer.len() - 2;
+    #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+    enum Channel {
+        LeftTop,
+        LeftBot,
+        RightTop,
+        RightBot,
+    }
+    use Channel::*;
+
+    let mut to_rx = LeftTop;
+    let mut to_tx = LeftTop;
 
     loop {
         // dispatch the receive and transmit actions as they're ready
 
         let rx = audio_rx.sr.read();
+        assert!(rx.ovr().is_no_overrun());
         if rx.rxne().bit_is_set() {
-            if rx.chside().is_left() {
-                if rx.chside().bit() != last_rxside {
+            match to_rx {
+                LeftTop => {
                     top_buffer[rx_i] = audio_rx.dr.read().dr().bits();
-                } else {
+                    to_rx = LeftBot;
+                }
+                LeftBot => {
                     bot_buffer[rx_i] = audio_rx.dr.read().dr().bits();
                     // receiving samples from the codec is what drives the indexing forward
                     rx_i = (rx_i + 1) % top_buffer.len();
+                    to_rx = RightTop;
                 }
-            } else {
-                // do nothing with the right channel
-                audio_rx.dr.read();
+                RightTop => {
+                    // do nothing with the right channel
+                    audio_rx.dr.read();
+                    to_rx = RightBot;
+                }
+                RightBot => {
+                    // do nothing with the right channel
+                    audio_rx.dr.read();
+                    to_rx = LeftTop;
+                }
             }
-
-            last_rxside = rx.chside().bit();
         }
         core::mem::drop(rx);
 
         let tx = audio_tx.sr.read();
+        assert!(tx.udr().is_no_underrun());
         if tx.txe().bit_is_set() {
-            // TODO: I have no idea which part is lying to me, but experimentally, I
-            // accidentally probed the "wrong" output pin and it started working (ish).
-            if tx.chside().is_right() {
-                if tx.chside().bit() != last_txside {
+            match to_tx {
+                LeftTop => {
                     audio_tx.dr.write(|w| w.dr().bits(top_buffer[tx_i]));
-                } else {
+                    to_tx = LeftBot;
+                }
+                LeftBot => {
                     audio_tx.dr.write(|w| w.dr().bits(bot_buffer[tx_i]));
                     tx_i = (tx_i + 1) % top_buffer.len();
+                    to_tx = RightTop;
                 }
-            } else {
-                // send nothing to the right channel
-                audio_tx.dr.write(|w| w.dr().bits(0));
+                RightTop => {
+                    // send nothing to the right channel
+                    audio_tx.dr.write(|w| w.dr().bits(0));
+                    to_tx = RightBot;
+                }
+                RightBot => {
+                    // send nothing to the right channel
+                    audio_tx.dr.write(|w| w.dr().bits(0));
+                    to_tx = LeftTop;
+                }
             }
-
-            last_txside = tx.chside().bit();
         }
     }
 }
