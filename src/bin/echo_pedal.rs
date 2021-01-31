@@ -113,6 +113,9 @@ fn main() -> ! {
     control.set_register(0xf /* reset */, 0);
     control.set_register(0x6 /* power down */, 0b0_0111_0011);
 
+    // disable input mute, set to 0dB gain
+    control.set_register(0x0 /* left line in */, 0b0_0001_0111);
+
     // sidetone off; DAC selected; bypass off; line input selected; mic muted; mic boost off
     control.set_register(0x4 /* analogue audio path */, 0b0_0001_0010);
 
