@@ -111,7 +111,7 @@ fn main() -> ! {
     };
 
     control.set_register(0xf /* reset */, 0);
-    control.set_register(0x6 /* power down */, 0b0_0111_0011);
+    control.set_register(0x6 /* power down */, 0b0_0111_0010);
 
     // disable input mute, set to 0dB gain
     control.set_register(0x0 /* left line in */, 0b0_0001_0111);
@@ -132,7 +132,7 @@ fn main() -> ! {
     control.set_register(0x9 /* active */, 0x1);
 
     // enable output
-    control.set_register(0x6 /* power down */, 0b0_0110_0011);
+    control.set_register(0x6 /* power down */, 0b0_0110_0010);
 
     // buffer that can hold a half second of data
     let mut top_buffer = [0u16; SAMPLE_RATE / 2];
