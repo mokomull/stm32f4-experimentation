@@ -140,7 +140,7 @@ fn main() -> ! {
 
     assert_eq!(top_buffer.len(), bot_buffer.len());
 
-    let mut rx_i = (SAMPLE_RATE * 800 / 1000) % top_buffer.len();
+    let mut rx_i = (SAMPLE_RATE * 400 / 1000) % top_buffer.len();
     let mut tx_i = 0;
 
     #[derive(Debug, Clone, Copy, Eq, PartialEq)]
