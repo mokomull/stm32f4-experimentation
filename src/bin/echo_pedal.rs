@@ -117,6 +117,18 @@ fn main() -> ! {
         w.datlen().variant(i2scfgr::DATLEN_A::TWENTYFOURBIT);
         w.chlen().variant(i2scfgr::CHLEN_A::THIRTYTWOBIT)
     });
+    // I2S must be enabled while WS is low, according to errata ES0182 rev 13, 2.7.1
+    unsafe {
+        // safety: I do what I want.
+
+        // WS is PB9
+        let gpiob = &*stm32::GPIOB::ptr();
+        // watch a whole cycle of low
+        while !gpiob.idr.read().idr9().bit() {}
+        // then a whole cycle of high
+        while gpiob.idr.read().idr9().bit() {}
+        // then I guess it'll be low long enough for me to get to the enabling below.
+    }
     audio_tx.i2scfgr.modify(|_r, w| w.i2se().set_bit());
 
     loop {
