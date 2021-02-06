@@ -39,6 +39,9 @@ fn main() -> ! {
     let _control_nss = porta.pa4.into_alternate_af6();
     let mut control_csb = portc.pc11.into_push_pull_output();
 
+    let mut clock_indicator = portb.pb12.into_push_pull_output();
+    let mut channel_indicator = porta.pa2.into_push_pull_output();
+
     control_csb.set_high().unwrap();
 
     // enable the DAC peripheral
@@ -85,6 +88,7 @@ fn main() -> ! {
 
     // disable input mute, set to 0dB gain
     control.set_register(0x0 /* left line in */, 0b0_0001_0111);
+    // control.set_register(0x1 /* right line in */, 0b0_0001_0111);
 
     // sidetone off; DAC selected; bypass off; line input selected; mic muted; mic boost off
     control.set_register(0x4 /* analogue audio path */, 0b0_0001_0010);
@@ -104,8 +108,30 @@ fn main() -> ! {
     // enable output
     control.set_register(0x6 /* power down */, 0b0_0110_0010);
 
+    let audio_tx = peripherals.SPI2;
+    audio_tx.i2scfgr.write(|w| {
+        w.i2smod().set_bit();
+        w.i2scfg().variant(i2scfgr::I2SCFG_A::SLAVETX);
+        w.i2sstd().variant(i2scfgr::I2SSTD_A::MSB);
+        w.ckpol().clear_bit();
+        w.datlen().variant(i2scfgr::DATLEN_A::TWENTYFOURBIT);
+        w.chlen().variant(i2scfgr::CHLEN_A::THIRTYTWOBIT)
+    });
+    audio_tx.i2scfgr.modify(|_r, w| w.i2se().set_bit());
+
     loop {
-        cortex_m::asm::wfi();
+        let sr = audio_tx.sr.read();
+        if sr.txe().bit_is_set() {
+            clock_indicator.toggle().unwrap();
+
+            if sr.chside().bit_is_clear() {
+                channel_indicator.set_low().unwrap();
+            } else {
+                channel_indicator.set_high().unwrap();
+            }
+
+            audio_tx.dr.write(|w| w.dr().bits(1234));
+        }
     }
 
     let audio_rx = peripherals.I2S2EXT;
@@ -118,25 +144,6 @@ fn main() -> ! {
         w.chlen().thirty_two_bit()
     });
     audio_rx.i2scfgr.modify(|_r, w| w.i2se().set_bit());
-
-    let audio_tx = peripherals.SPI2;
-    audio_tx.i2scfgr.write(|w| {
-        w.i2smod().set_bit();
-        w.i2scfg().variant(i2scfgr::I2SCFG_A::MASTERTX);
-        w.i2sstd().variant(i2scfgr::I2SSTD_A::MSB);
-        w.ckpol().clear_bit();
-        w.datlen().variant(i2scfgr::DATLEN_A::TWENTYFOURBIT);
-        w.chlen().variant(i2scfgr::CHLEN_A::THIRTYTWOBIT)
-    });
-    // 86MHz / (3 * 2 + 1) = 12.2857MHz MCK
-    // 12.2857MHz / 8 [fixed in hardware] = 1.53571MHz bit clock
-    // 1.53571MHz / (2 channels * 16 bits per sample) = 47.9911k samples per sec
-    audio_tx.i2spr.write(|w| {
-        w.mckoe().set_bit();
-        unsafe { w.i2sdiv().bits(3) };
-        w.odd().set_bit()
-    });
-    audio_tx.i2scfgr.modify(|_r, w| w.i2se().set_bit());
 
     // buffer that can hold a half second of data
     let mut top_buffer = [0u16; SAMPLE_RATE / 2];
