@@ -21,7 +21,7 @@ fn main() -> ! {
     let mut core_peripherals = cortex_m::Peripherals::take().unwrap();
 
     let rcc = peripherals.RCC.constrain();
-    let clocks = rcc.cfgr.use_hse(8.mhz()).sysclk(168.mhz()).freeze();
+    let clocks = rcc.cfgr.use_hse(8.mhz()).sysclk(167_500.khz()).freeze();
 
     let _itm = &mut core_peripherals.ITM.stim[0];
 
@@ -29,7 +29,6 @@ fn main() -> ! {
     let portb = peripherals.GPIOB.split();
     let portc = peripherals.GPIOC.split();
 
-    let _audio_mck = portc.pc6.into_alternate_af5();
     let _audio_sck = portb.pb10.into_alternate_af5();
     let _audio_sd_out = portc.pc3.into_alternate_af5();
     let _audio_sd_in = portc.pc2.into_alternate_af6();
@@ -46,22 +45,67 @@ fn main() -> ! {
     unsafe {
         let rcc = &*stm32::RCC::ptr();
 
-        // enable the I2S PLL: the VCO input should be 2MHz since we have an 8MHz crystal -- but that's
-        // going to depend on what freeze() chose above.
-        // 2MHz * 129 / 3 = 86 MHz
-        rcc.plli2scfgr.write(|w| {
-            w.plli2sn().bits(129);
-            w.plli2sr().bits(3)
-        });
-        rcc.cr.modify(|_r, w| w.plli2son().set_bit());
-        while !rcc.cr.read().plli2srdy().bit() {}
-
         rcc.apb1enr.modify(|_r, w| w.spi2en().set_bit());
         rcc.ahb1enr.modify(|_r, w| {
             w.dma1en().set_bit();
             w.dma2en().set_bit()
         });
-        rcc.apb2enr.modify(|_r, w| w.adc1en().set_bit())
+        rcc.apb2enr.modify(|_r, w| w.adc1en().set_bit());
+
+        rcc.plli2scfgr.write(|w| {
+            w.plli2sn().bits(60);
+            w.plli2sr().bits(5)
+        });
+        rcc.cr.modify(|_r, w| w.plli2son().set_bit());
+        while !rcc.cr.read().plli2srdy().bit() {}
+
+        rcc.cfgr.modify(|_r, w| w.mco2().plli2s());
+    }
+
+    let _mco2 = portc.pc9.into_alternate_af0();
+
+    let control_spi = stm32f4xx_hal::spi::Spi::spi3(
+        peripherals.SPI3,
+        (control_sck, NoMiso, control_mosi),
+        spi::Mode {
+            phase: spi::Phase::CaptureOnSecondTransition,
+            polarity: spi::Polarity::IdleHigh,
+        },
+        200.khz().into(),
+        clocks,
+    );
+    let mut control = Control {
+        spi: control_spi,
+        not_cs: control_csb,
+        delay: stm32f4xx_hal::delay::Delay::new(core_peripherals.SYST, clocks),
+    };
+
+    control.set_register(0xf /* reset */, 0);
+    control.set_register(0x6 /* power down */, 0b0_0111_0010);
+
+    // disable input mute, set to 0dB gain
+    control.set_register(0x0 /* left line in */, 0b0_0001_0111);
+
+    // sidetone off; DAC selected; bypass off; line input selected; mic muted; mic boost off
+    control.set_register(0x4 /* analogue audio path */, 0b0_0001_0010);
+
+    // disable DAC mute, deemphasis for 48k
+    control.set_register(0x5 /* digital audio path */, 0b0_0000_0110);
+
+    // nothing inverted, master, 24-bits, MSB format
+    control.set_register(0x7 /* digital audio interface */, 0b0_0100_1001);
+
+    // no clock division, USB mode, 48k
+    control.set_register(0x8 /* sampling control */, 0b0_00_0000_01);
+
+    // set active
+    control.set_register(0x9 /* active */, 0x1);
+
+    // enable output
+    control.set_register(0x6 /* power down */, 0b0_0110_0010);
+
+    loop {
+        cortex_m::asm::wfi();
     }
 
     let audio_rx = peripherals.I2S2EXT;
@@ -93,46 +137,6 @@ fn main() -> ! {
         w.odd().set_bit()
     });
     audio_tx.i2scfgr.modify(|_r, w| w.i2se().set_bit());
-
-    let control_spi = stm32f4xx_hal::spi::Spi::spi3(
-        peripherals.SPI3,
-        (control_sck, NoMiso, control_mosi),
-        spi::Mode {
-            phase: spi::Phase::CaptureOnSecondTransition,
-            polarity: spi::Polarity::IdleHigh,
-        },
-        200.khz().into(),
-        clocks,
-    );
-    let mut control = Control {
-        spi: control_spi,
-        not_cs: control_csb,
-        delay: stm32f4xx_hal::delay::Delay::new(core_peripherals.SYST, clocks),
-    };
-
-    control.set_register(0xf /* reset */, 0);
-    control.set_register(0x6 /* power down */, 0b0_0111_0010);
-
-    // disable input mute, set to 0dB gain
-    control.set_register(0x0 /* left line in */, 0b0_0001_0111);
-
-    // sidetone off; DAC selected; bypass off; line input selected; mic muted; mic boost off
-    control.set_register(0x4 /* analogue audio path */, 0b0_0001_0010);
-
-    // disable DAC mute, deemphasis for 48k
-    control.set_register(0x5 /* digital audio path */, 0b0_0000_0110);
-
-    // nothing inverted, slave, 24-bits, MSB format
-    control.set_register(0x7 /* digital audio interface */, 0b0_0000_1001);
-
-    // no clock division, normal mode, 48k
-    control.set_register(0x8 /* sampling control */, 0b0_00_0000_00);
-
-    // set active
-    control.set_register(0x9 /* active */, 0x1);
-
-    // enable output
-    control.set_register(0x6 /* power down */, 0b0_0110_0010);
 
     // buffer that can hold a half second of data
     let mut top_buffer = [0u16; SAMPLE_RATE / 2];
