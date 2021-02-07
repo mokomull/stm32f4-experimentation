@@ -19,6 +19,7 @@ stm32f407g-disc = { git = "https://github.com/stm32-rs/stm32f407g-disc.git" }
 stm32f4xx-hal = { version = "0.8", features = [ "usb_fs" ]}
 usb-device = "0.2"
 usbd-serial = "0.1"
+wm8731 = { git = "https://github.com/eric-wood/wm8731.git", branch = "main" }
 
 [profile.release]
 opt-level = 2

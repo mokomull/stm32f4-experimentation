@@ -11,6 +11,10 @@ use stm32f4xx_hal::stm32;
 
 use stm32::spi1::i2scfgr;
 
+use wm8731::digital_audio_interface_format::{Format, Length};
+use wm8731::digital_audio_path::Deemphasis;
+use wm8731::WM8731;
+
 // approximate!  This will actually run a fraction of a percent slow, due to I2S clocking
 // constraints.
 const SAMPLE_RATE: usize = 48_000;
@@ -110,29 +114,71 @@ fn main() -> ! {
         delay: stm32f4xx_hal::delay::Delay::new(core_peripherals.SYST, clocks),
     };
 
-    control.set_register(0xf /* reset */, 0);
-    control.set_register(0x6 /* power down */, 0b0_0111_0010);
+    fn final_power_settings(w: &mut wm8731::power_down::PowerDown) {
+        w.power_off().disable();
+        w.clock_output().enable();
+        w.oscillator().enable();
+        // it is non-obvious that output() is the only change from the earlier power_down()
+        // call.
+        w.output().disable();
+        w.dac().disable();
+        w.adc().disable();
+        w.mic().enable();
+        w.line_input().disable();
+    }
+
+    control.set_register(WM8731::reset());
+    control.set_register(WM8731::power_down(|w| {
+        final_power_settings(w);
+        w.output().enable();
+    }));
 
     // disable input mute, set to 0dB gain
-    control.set_register(0x0 /* left line in */, 0b0_0001_0111);
+    control.set_register(WM8731::left_line_in(|w| {
+        w.both().disable();
+        w.mute().disable();
+        w.volume().nearest_dB(0);
+    }));
 
     // sidetone off; DAC selected; bypass off; line input selected; mic muted; mic boost off
-    control.set_register(0x4 /* analogue audio path */, 0b0_0001_0010);
+    control.set_register(WM8731::analog_audio_path(|w| {
+        w.sidetone().disable();
+        w.dac_select().select();
+        w.bypass().line_input(); // not "line_input" at all, but that's bit-clear
+        w.input_select().line_input();
+        w.mute_mic().enable();
+        w.mic_boost().disable();
+    }));
 
     // disable DAC mute, deemphasis for 48k
-    control.set_register(0x5 /* digital audio path */, 0b0_0000_0110);
+    control.set_register(WM8731::digital_audio_path(|w| {
+        w.dac_mut();
+        w.deemphasis(Deemphasis::SampleRate48);
+    }));
 
     // nothing inverted, slave, 24-bits, MSB format
-    control.set_register(0x7 /* digital audio interface */, 0b0_0000_1001);
+    control.set_register(WM8731::digital_audio_interface_format(|w| {
+        w.bit_clock_invert().disable();
+        w.master().disable();
+        w.left_right_dac_clock_swap().right();
+        w.left_right_phase().disable();
+        w.bit_length(Length::Bits24);
+        w.format(Format::LeftJustified);
+    }));
 
     // no clock division, normal mode, 48k
-    control.set_register(0x8 /* sampling control */, 0b0_00_0000_00);
+    control.set_register(WM8731::sampling(|w| {
+        w.core_clock_divider_select().noraml();
+        w.base_oversampling_rate().disable();
+        w.sample_rate().adc_48();
+        w.usb_normal().normal();
+    }));
 
     // set active
-    control.set_register(0x9 /* active */, 0x1);
+    control.set_register(WM8731::active().active());
 
     // enable output
-    control.set_register(0x6 /* power down */, 0b0_0110_0010);
+    control.set_register(WM8731::power_down(final_power_settings));
 
     // buffer that can hold a half second of data
     let mut top_buffer = [0u16; SAMPLE_RATE / 2];
@@ -228,14 +274,14 @@ where
     GPIO::Error: core::fmt::Debug,
     DELAY: embedded_hal::blocking::delay::DelayUs<u8>,
 {
-    fn set_register(&mut self, register: u8, value: u16) {
+    fn set_register(&mut self, register: wm8731::Register) {
         self.not_cs.set_low().unwrap();
 
         embedded_hal::blocking::spi::Write::write(
             &mut self.spi,
             &[
-                (register << 1) | ((value & 0x100) >> 8) as u8,
-                (value & 0xff) as u8,
+                (register.address << 1) | ((register.value & 0x100) >> 8) as u8,
+                (register.value & 0xff) as u8,
             ],
         )
         .expect("SPI write failed");

@@ -250,6 +250,7 @@ dependencies = [
  "stm32f4xx-hal",
  "usb-device",
  "usbd-serial",
+ "wm8731",
 ]
 
 [[package]]
@@ -366,3 +367,8 @@ checksum = "0d67cb4616d99b940db1d6bd28844ff97108b498a6ca850e5b6191a532063286"
 dependencies = [
  "vcell",
 ]
+
+[[package]]
+name = "wm8731"
+version = "0.1.0"
+source = "git+https://github.com/eric-wood/wm8731.git?branch=main#5bb58e8b2106baec134a1648dcad6775f5f10eb9"
