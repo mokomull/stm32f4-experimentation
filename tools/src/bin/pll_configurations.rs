@@ -1,7 +1,5 @@
 use std::ops::RangeInclusive;
 
-use itertools::iproduct;
-
 type Rational = num_rational::Rational64;
 
 // VCO input must be between 1MHz and 2MHz, per documentation for the PLLM bits of RCC_PLLCFGR
@@ -27,42 +25,50 @@ fn main() {
 
     let hse = Rational::new(11_059_200.into(), 1.into());
 
-    let vco_inputs = m_range.filter_map(|m| {
-        let vco_input = hse / m;
-        VALID_VCO_INPUT.contains(&vco_input).then(|| vco_input)
-    });
-
     let mut count: u64 = 0;
 
-    for (vco_input, n, p, q, i2sn, i2sr) in
-        iproduct!(vco_inputs, n_range, p_range, q_range, i2sn_range, i2sr_range)
-    {
-        let vco_output = vco_input * n;
-        if !VALID_VCO_OUTPUT.contains(&vco_output) {
+    for m in m_range {
+        let vco_input = hse / m;
+        if !VALID_VCO_INPUT.contains(&vco_input) {
             continue;
         }
 
-        let pll_clk = vco_output / p;
-        if !VALID_PLL_OUT.contains(&pll_clk) {
-            continue;
-        }
+        for n in n_range.clone() {
+            let vco_output = vco_input * n;
+            if !VALID_VCO_OUTPUT.contains(&vco_output) {
+                continue;
+            }
 
-        let pll48_clk = vco_output / q;
-        if !VALID_PLL48_OUT.contains(&pll48_clk) {
-            continue;
-        }
+            for p in p_range.clone() {
+                let pll_clk = vco_output / p;
+                if !VALID_PLL_OUT.contains(&pll_clk) {
+                    continue;
+                }
 
-        let i2s_vco_output = vco_input * i2sn;
-        if !VALID_VCO_OUTPUT.contains(&i2s_vco_output) {
-            continue;
-        }
+                for q in q_range.clone() {
+                    let pll48_clk = vco_output / q;
+                    if !VALID_PLL48_OUT.contains(&pll48_clk) {
+                        continue;
+                    }
 
-        let i2s_clock = i2s_vco_output / i2sr;
-        if !VALID_PLL_OUT.contains(&i2s_clock) {
-            continue;
-        }
+                    for i2sn in i2sn_range.clone() {
+                        let i2s_vco_output = vco_input * i2sn;
+                        if !VALID_VCO_OUTPUT.contains(&i2s_vco_output) {
+                            continue;
+                        }
 
-        count += 1;
+                        for i2sr in i2sr_range.clone() {
+                            let i2s_clock = i2s_vco_output / i2sr;
+                            if !VALID_PLL_OUT.contains(&i2s_clock) {
+                                continue;
+                            }
+
+                            count += 1;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     dbg!(count);
