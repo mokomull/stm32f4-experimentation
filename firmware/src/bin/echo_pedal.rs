@@ -11,8 +11,6 @@ use stm32f4xx_hal::stm32;
 
 use stm32::spi1::i2scfgr;
 
-use wm8731::digital_audio_interface_format::{Format, Length};
-use wm8731::digital_audio_path::Deemphasis;
 use wm8731::WM8731;
 
 // approximate!  This will actually run a fraction of a percent slow, due to I2S clocking
@@ -115,22 +113,20 @@ fn main() -> ! {
     };
 
     fn final_power_settings(w: &mut wm8731::power_down::PowerDown) {
-        w.power_off().disable();
-        w.clock_output().enable();
-        w.oscillator().enable();
-        // it is non-obvious that output() is the only change from the earlier power_down()
-        // call.
-        w.output().disable();
-        w.dac().disable();
-        w.adc().disable();
-        w.mic().enable();
-        w.line_input().disable();
+        w.power_off().power_on();
+        w.clock_output().power_off();
+        w.oscillator().power_off();
+        w.output().power_on();
+        w.dac().power_on();
+        w.adc().power_on();
+        w.mic().power_off();
+        w.line_input().power_on();
     }
 
     control.set_register(WM8731::reset());
     control.set_register(WM8731::power_down(|w| {
         final_power_settings(w);
-        w.output().enable();
+        w.output().power_off();
     }));
 
     // disable input mute, set to 0dB gain
@@ -144,7 +140,7 @@ fn main() -> ! {
     control.set_register(WM8731::analog_audio_path(|w| {
         w.sidetone().disable();
         w.dac_select().select();
-        w.bypass().line_input(); // not "line_input" at all, but that's bit-clear
+        w.bypass().disable();
         w.input_select().line_input();
         w.mute_mic().enable();
         w.mic_boost().disable();
@@ -153,23 +149,23 @@ fn main() -> ! {
     // disable DAC mute, deemphasis for 48k
     control.set_register(WM8731::digital_audio_path(|w| {
         w.dac_mut();
-        w.deemphasis(Deemphasis::SampleRate48);
+        w.deemphasis().frequency_48();
     }));
 
     // nothing inverted, slave, 24-bits, MSB format
     control.set_register(WM8731::digital_audio_interface_format(|w| {
-        w.bit_clock_invert().disable();
-        w.master().disable();
-        w.left_right_dac_clock_swap().right();
-        w.left_right_phase().disable();
-        w.bit_length(Length::Bits24);
-        w.format(Format::LeftJustified);
+        w.bit_clock_invert().no_invert();
+        w.master_slave().slave();
+        w.left_right_dac_clock_swap().right_channel_dac_data_right();
+        w.left_right_phase().data_when_daclrc_low();
+        w.bit_length().bits_24();
+        w.format().left_justified();
     }));
 
     // no clock division, normal mode, 48k
     control.set_register(WM8731::sampling(|w| {
-        w.core_clock_divider_select().noraml();
-        w.base_oversampling_rate().disable();
+        w.core_clock_divider_select().normal();
+        w.base_oversampling_rate().normal_256();
         w.sample_rate().adc_48();
         w.usb_normal().normal();
     }));
