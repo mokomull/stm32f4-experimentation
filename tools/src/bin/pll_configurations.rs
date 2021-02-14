@@ -1,5 +1,7 @@
 use std::ops::RangeInclusive;
 
+use itertools::Itertools;
+
 type Rational = num_rational::Rational64;
 
 // VCO input must be between 1MHz and 2MHz, per documentation for the PLLM bits of RCC_PLLCFGR
@@ -15,6 +17,10 @@ static VALID_PLL_OUT: RangeInclusive<Rational> =
 static VALID_PLL48_OUT: RangeInclusive<Rational> =
     Rational::new_raw(48_000_000, 1)..=Rational::new_raw(75_000_000, 1);
 
+// For now, print the I2S settings that get us within 1% of 12.288MHz
+static DESIRED_I2S_MCLK: RangeInclusive<Rational> =
+    Rational::new_raw(12_165_120, 1)..=Rational::new_raw(12_410_880, 1);
+
 fn main() {
     let m_range = 2..=63;
     let n_range = 50..=432;
@@ -22,6 +28,8 @@ fn main() {
     let q_range = 2..=15;
     let i2sn_range = 50..=432;
     let i2sr_range = 2..=7;
+    let i2sdiv_range = 2..=255;
+    let odd_range = 0..=1;
 
     let hse = Rational::new(11_059_200.into(), 1.into());
 
@@ -63,7 +71,16 @@ fn main() {
                                 continue;
                             }
 
-                            count += 1;
+                            for (i2sdiv, odd) in
+                                i2sdiv_range.clone().cartesian_product(odd_range.clone())
+                            {
+                                let mclk = i2s_clock / (2 * i2sdiv + odd);
+                                if !DESIRED_I2S_MCLK.contains(&mclk) {
+                                    continue;
+                                }
+
+                                count += 1;
+                            }
                         }
                     }
                 }
