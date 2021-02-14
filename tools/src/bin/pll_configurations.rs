@@ -84,6 +84,10 @@ fn main() {
                         }
                     }
                 }
+
+                // only check the smallest value of `p` that fits the criteria, corresponding to the
+                // fastest core clock we can make with the already-chosen M and N settings.
+                break;
             }
         }
     }
