@@ -53,7 +53,7 @@ fn main() {
                     continue;
                 }
 
-                for q in q_range.clone() {
+                for q in q_range.clone().rev() {
                     let pll48_clk = vco_output / q;
                     if !VALID_PLL48_OUT.contains(&pll48_clk) {
                         continue;
@@ -83,6 +83,11 @@ fn main() {
                             }
                         }
                     }
+
+                    // only check the largest value of `q` that fits the criteria, corresponding to
+                    // the slowest PLL48 clock we can make with the chosen M and N settings -- i.e.
+                    // the closest to 48MHz.
+                    break;
                 }
 
                 // only check the smallest value of `p` that fits the criteria, corresponding to the
