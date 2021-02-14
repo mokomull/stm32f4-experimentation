@@ -33,7 +33,7 @@ fn main() {
 
     let hse = Rational::new(11_059_200.into(), 1.into());
 
-    let mut count: u64 = 0;
+    println!("M,N,P,Q,I2SN,I2SR,I2SDIV,ODD,PLL_CLK,PLL48_CLK,I2S_MCLK");
 
     for m in m_range {
         let vco_input = hse / m;
@@ -79,7 +79,20 @@ fn main() {
                                     continue;
                                 }
 
-                                count += 1;
+                                println!(
+                                    "{},{},{},{},{},{},{},{},{},{},{}",
+                                    m,
+                                    n,
+                                    p,
+                                    q,
+                                    i2sn,
+                                    i2sr,
+                                    i2sdiv,
+                                    odd,
+                                    floatify(&pll_clk),
+                                    floatify(&pll48_clk),
+                                    floatify(&mclk),
+                                )
                             }
                         }
                     }
@@ -96,6 +109,8 @@ fn main() {
             }
         }
     }
+}
 
-    dbg!(count);
+fn floatify(input: &Rational) -> f64 {
+    *input.numer() as f64 / *input.denom() as f64
 }
