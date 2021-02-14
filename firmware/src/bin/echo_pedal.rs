@@ -4,8 +4,8 @@
 use cortex_m_rt::entry;
 use panic_itm as _;
 
-use stm32f407g_disc::spi::{self, NoMiso};
 use stm32f4xx_hal::prelude::*;
+use stm32f4xx_hal::spi::{self, NoMiso};
 
 use stm32f4xx_hal::stm32;
 

@@ -35,7 +35,7 @@ fn main() -> ! {
     let _mco2 = portc
         .pc9
         .into_alternate_af0()
-        .set_speed(stm32f407g_disc::gpio::Speed::VeryHigh);
+        .set_speed(stm32f4xx_hal::gpio::Speed::VeryHigh);
 
     unsafe {
         let rcc = &*stm32::RCC::ptr();

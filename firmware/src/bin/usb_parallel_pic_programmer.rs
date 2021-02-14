@@ -19,7 +19,7 @@ fn main() -> ! {
     let _core_peripherals = cortex_m::Peripherals::take().unwrap();
 
     let rcc = peripherals.RCC.constrain();
-    let _clocks = rcc
+    let clocks = rcc
         .cfgr
         .use_hse(8.mhz())
         .sysclk(168.mhz())
@@ -29,6 +29,7 @@ fn main() -> ! {
     let porta = peripherals.GPIOA.split();
 
     let usb = stm32f4xx_hal::otg_fs::USB {
+        hclk: clocks.hclk(),
         usb_global: peripherals.OTG_FS_GLOBAL,
         usb_device: peripherals.OTG_FS_DEVICE,
         usb_pwrclk: peripherals.OTG_FS_PWRCLK,
