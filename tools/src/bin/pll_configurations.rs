@@ -29,11 +29,7 @@ fn main() {
 
     let vco_inputs = m_range.filter_map(|m| {
         let vco_input = hse / m;
-        if VALID_VCO_INPUT.contains(&vco_input) {
-            Some(vco_input)
-        } else {
-            None
-        }
+        VALID_VCO_INPUT.contains(&vco_input).then(|| vco_input)
     });
 
     let mut count: u64 = 0;
