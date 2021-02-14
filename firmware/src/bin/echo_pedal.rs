@@ -23,7 +23,12 @@ fn main() -> ! {
     let mut core_peripherals = cortex_m::Peripherals::take().unwrap();
 
     let rcc = peripherals.RCC.constrain();
-    let clocks = rcc.cfgr.use_hse(8.mhz()).sysclk(168.mhz()).freeze();
+    let clocks = rcc
+        .cfgr
+        .use_hse(8.mhz())
+        .sysclk(168.mhz())
+        .i2s_clk(61_440.khz())
+        .freeze();
 
     let _itm = &mut core_peripherals.ITM.stim[0];
 
@@ -47,16 +52,6 @@ fn main() -> ! {
     // enable the DAC peripheral
     unsafe {
         let rcc = &*stm32::RCC::ptr();
-
-        // enable the I2S PLL: the VCO input should be 2MHz since we have an 8MHz crystal -- but that's
-        // going to depend on what freeze() chose above.
-        // 2MHz * 129 / 3 = 86 MHz
-        rcc.plli2scfgr.write(|w| {
-            w.plli2sn().bits(129);
-            w.plli2sr().bits(3)
-        });
-        rcc.cr.modify(|_r, w| w.plli2son().set_bit());
-        while !rcc.cr.read().plli2srdy().bit() {}
 
         rcc.apb1enr.modify(|_r, w| w.spi2en().set_bit());
         rcc.ahb1enr.modify(|_r, w| {
@@ -86,12 +81,12 @@ fn main() -> ! {
         w.datlen().variant(i2scfgr::DATLEN_A::TWENTYFOURBIT);
         w.chlen().variant(i2scfgr::CHLEN_A::THIRTYTWOBIT)
     });
-    // 86MHz / (3 * 2 + 1) = 12.2857MHz MCK
-    // 12.2857MHz / 8 [fixed in hardware] = 1.53571MHz bit clock
-    // 1.53571MHz / (2 channels * 16 bits per sample) = 47.9911k samples per sec
+    // 61.440MHz / (2 * 2 + 1) = 12.288MHz MCK
+    // 12.288MHz / 4 [fixed in hardware] = 3.072MHz bit clock
+    // 3.072MHz / (2 channels * 32 bits per sample) = 48k samples per sec
     audio_tx.i2spr.write(|w| {
         w.mckoe().set_bit();
-        unsafe { w.i2sdiv().bits(3) };
+        unsafe { w.i2sdiv().bits(2) };
         w.odd().set_bit()
     });
     audio_tx.i2scfgr.modify(|_r, w| w.i2se().set_bit());
